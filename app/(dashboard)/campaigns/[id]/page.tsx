@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import {
-  ArrowLeft, Edit2, Download, TrendingUp, Eye,
+  ArrowLeft, Edit2, Download, Eye,
   Users, DollarSign, ArrowUpRight, Video,
   CheckCircle2, AlertTriangle, Clock, UserPlus,
   Check, Pause, ChevronDown, RefreshCw, AlertCircle,
@@ -16,7 +16,6 @@ import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/li
 import { fetchCampaign, fetchCampaignCreators } from "@/lib/campaigns-data"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Campaign, CampaignCreator, CampaignStatus, CreatorStatus, PayoutStatus } from "@/types"
-import { cn } from "@/lib/utils"
 
 // ── Mock data ─────────────────────────────────────────────────
 const MOCK_CAMPAIGN: Campaign = {
