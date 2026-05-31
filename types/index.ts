@@ -43,7 +43,7 @@ export interface ChartDataPoint {
   revenue: number
 }
 
-export interface Creator {
+export interface DashboardCreator {
   id: string
   name: string
   avatar: string
@@ -159,5 +159,69 @@ export interface CampaignAlert {
   type: "warning" | "info" | "success" | "error"
   message: string
   is_read: boolean
+  created_at: string
+}
+
+// ── Payments Module ───────────────────────────────────────────
+
+export type PaymentMethod = "paypal" | "bank" | "wise" | "crypto" | "check"
+export type KycStatus = "verified" | "pending" | "not_started" | "rejected"
+export type PayoutStatusType = "pending" | "approved" | "processing" | "paid" | "on_hold" | "failed"
+
+export interface Creator {
+  id: string
+  workspace_id: string | null
+  name: string
+  email: string | null
+  avatar_url: string | null
+  payment_method: PaymentMethod
+  paypal_email: string | null
+  bank_details: Record<string, string> | null
+  tax_country: string | null
+  kyc_status: KycStatus
+  total_earned: number
+  total_paid: number
+  invite_token: string | null
+  invite_sent_at: string | null
+  invite_accepted: boolean
+  created_at: string
+}
+
+export interface Payout {
+  id: string
+  workspace_id: string | null
+  campaign_id: string | null
+  creator_id: string
+  amount: number
+  base_fee: number
+  cpm_earned: number
+  bonus: number
+  adjustment: number
+  adjustment_note: string | null
+  status: PayoutStatusType
+  payment_method: PaymentMethod
+  invoice_url: string | null
+  invoice_number: string | null
+  views_count: number
+  videos_count: number
+  paid_at: string | null
+  notes: string | null
+  created_at: string
+  // joins
+  creator?: Creator
+  campaign?: { id: string; name: string } | null
+}
+
+export interface PayoutRule {
+  id: string
+  workspace_id: string | null
+  name: string
+  base_fee: number
+  cpm_rate: number
+  milestone_bonus: number
+  milestone_views: number
+  performance_cap: number
+  payout_window_days: number
+  is_default: boolean
   created_at: string
 }
