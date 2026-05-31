@@ -225,3 +225,46 @@ export interface PayoutRule {
   is_default: boolean
   created_at: string
 }
+
+// ── Trends Module ─────────────────────────────────────────────
+
+export type TrendNiche =
+  | "beauty" | "tech" | "finance" | "fitness"
+  | "food" | "gaming" | "lifestyle" | "other"
+
+export type ContentFormat =
+  | "product_demo" | "testimonial" | "lifestyle"
+  | "hook_first" | "before_after" | "storytime" | "other"
+
+export interface TrendVideo {
+  id: string
+  workspace_id: string | null
+  platform: Platform
+  video_url: string | null
+  thumbnail_url: string | null
+  caption: string | null
+  creator_handle: string
+  views: number
+  likes: number
+  engagement_rate: number
+  virality_score: number
+  niche: TrendNiche | null
+  content_format: ContentFormat | null
+  posted_at: string | null
+  created_at: string
+}
+
+export interface InspirationBoard {
+  id: string
+  workspace_id: string | null
+  campaign_id: string | null
+  name: string
+  created_at: string
+}
+
+export interface BoardVideo {
+  id: string
+  board_id: string
+  video_id: string
+  created_at: string
+}
