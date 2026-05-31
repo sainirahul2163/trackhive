@@ -40,10 +40,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "relative flex flex-col h-full border-r transition-all duration-300 ease-in-out",
+        "relative flex flex-col flex-shrink-0 border-r transition-all duration-300 ease-in-out",
         "bg-[#111111] border-white/[0.06]",
         collapsed ? "w-[60px]" : "w-[220px]"
       )}
+      style={{ height: "100vh" }}
     >
       {/* Logo */}
       <div className={cn(

@@ -27,13 +27,17 @@
     --sidebar: 17 17 17;
   }
 
-  * {
-    @apply border-border;
+  html,
+  body {
+    height: 100%;
   }
 
   body {
-    @apply bg-background text-foreground;
+    background-color: #0a0a0a;
+    color: #fafafa;
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
