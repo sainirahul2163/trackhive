@@ -268,3 +268,71 @@ export interface BoardVideo {
   video_id: string
   created_at: string
 }
+
+// ── Competitor Intelligence Module ────────────────────────────
+
+export interface Competitor {
+  id: string
+  workspace_id: string | null
+  name: string
+  website: string | null
+  logo_url: string | null
+  created_at: string
+  // joined
+  accounts?: CompetitorAccount[]
+}
+
+export interface CompetitorAccount {
+  id: string
+  competitor_id: string
+  platform: Platform
+  username: string
+  avatar_url: string | null
+  follower_count: number
+  total_views: number
+  avg_views: number
+  posting_frequency: number
+  created_at: string
+}
+
+export interface CompetitorVideo {
+  id: string
+  competitor_account_id: string
+  platform: Platform
+  video_url: string | null
+  thumbnail_url: string | null
+  caption: string | null
+  views: number
+  likes: number
+  engagement_rate: number
+  content_format: ContentFormat | null
+  posted_at: string | null
+  created_at: string
+}
+
+export interface CompetitorCreator {
+  id: string
+  competitor_id: string
+  account_id: string | null
+  creator_handle: string
+  platform: Platform
+  avatar_url: string | null
+  follower_count: number
+  avg_views: number
+  videos_posted: number
+  status: "active" | "inactive"
+  flagged_outreach: boolean
+  first_seen_at: string
+  last_seen_at: string
+}
+
+export interface AiReport {
+  id: string
+  workspace_id: string | null
+  competitor_id: string
+  week_of: string
+  summary: string | null
+  top_videos: Array<{ url: string; views: number; caption: string }> | null
+  recommendations: string[] | null
+  created_at: string
+}
