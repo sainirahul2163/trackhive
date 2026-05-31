@@ -45,7 +45,15 @@ export function Topbar() {
   const unreadCount = notifications.filter((n) => n.unread).length
 
   return (
-    <header className="flex items-center justify-between h-14 px-5 border-b border-white/[0.06] bg-[#0a0a0a]">
+    <header
+      className="flex items-center justify-between px-5"
+      style={{
+        height: "56px",
+        flexShrink: 0,
+        backgroundColor: "#0a0a0a",
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
       {/* Workspace switcher */}
       <DropdownMenu>
         <DropdownMenuTrigger

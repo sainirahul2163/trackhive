@@ -1,8 +1,4 @@
-# ============================================================
-# CURSORIGNORE — Files Cursor AI should never auto-modify
-# ============================================================
-
-# Critical layout files — hardened with inline styles.
-# Modifying these breaks the dashboard layout (happened twice).
 app/(dashboard)/layout.tsx
 app/globals.css
+components/layout/sidebar.tsx
+components/layout/topbar.tsx

@@ -2,31 +2,48 @@ import { Platform } from "@/types"
 
 export const PLATFORM_CONFIG: Record<
   Platform,
-  { label: string; color: string; bg: string; textColor: string }
+  {
+    label: string
+    color: string
+    bg: string
+    textColor: string
+    /** Actual CSS background color value for inline styles */
+    bgColor: string
+    /** Actual CSS text/icon color value for inline styles */
+    fgColor: string
+  }
 > = {
   tiktok: {
     label: "TikTok",
     color: "#000000",
     bg: "bg-white/10",
     textColor: "text-white",
+    bgColor: "rgba(255,255,255,0.1)",
+    fgColor: "#ffffff",
   },
   instagram: {
     label: "Instagram",
     color: "#E1306C",
     bg: "bg-pink-500/10",
     textColor: "text-pink-400",
+    bgColor: "rgba(236,72,153,0.12)",
+    fgColor: "#f472b6",
   },
   youtube: {
     label: "YouTube",
     color: "#FF0000",
     bg: "bg-red-500/10",
     textColor: "text-red-400",
+    bgColor: "rgba(239,68,68,0.12)",
+    fgColor: "#f87171",
   },
   facebook: {
     label: "Facebook",
     color: "#1877F2",
     bg: "bg-blue-500/10",
     textColor: "text-blue-400",
+    bgColor: "rgba(59,130,246,0.12)",
+    fgColor: "#60a5fa",
   },
 }
 

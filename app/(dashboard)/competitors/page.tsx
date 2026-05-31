@@ -264,6 +264,7 @@ export default function CompetitorsPage() {
         style={{
           width: "280px", flexShrink: 0, display: "flex", flexDirection: "column",
           borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto",
+          backgroundColor: "#0a0a0a",
         }}
       >
         {/* Header */}
@@ -332,7 +333,10 @@ export default function CompetitorsPage() {
                       {platforms.map(p => {
                         const cfg = PLATFORM_CONFIG[p]
                         return (
-                          <span key={p} className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium ${cfg.bg} ${cfg.textColor}`}>
+                          <span
+                            key={p}
+                            style={{ backgroundColor: cfg.bgColor, color: cfg.fgColor, display: "inline-flex", alignItems: "center", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: 500 }}
+                          >
                             <PlatformIcon platform={p} className="w-2 h-2" />
                           </span>
                         )
@@ -388,7 +392,10 @@ export default function CompetitorsPage() {
                 {selected.accounts?.map(acc => {
                   const cfg = PLATFORM_CONFIG[acc.platform]
                   return (
-                    <span key={acc.id} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${cfg.bg} ${cfg.textColor}`}>
+                    <span
+                      key={acc.id}
+                      style={{ backgroundColor: cfg.bgColor, color: cfg.fgColor, display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "8px", fontSize: "12px", fontWeight: 500 }}
+                    >
                       <PlatformIcon platform={acc.platform} className="w-3 h-3" />
                       {acc.username}
                     </span>
@@ -494,7 +501,7 @@ export default function CompetitorsPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-zinc-300 truncate">{v.caption}</p>
-                            <span className={`text-[10px] font-medium ${platCfg.textColor}`}>{platCfg.label}</span>
+                            <span style={{ color: platCfg.fgColor, fontSize: "10px", fontWeight: 500 }}>{platCfg.label}</span>
                           </div>
                           <span className="text-sm font-semibold text-zinc-200 flex-shrink-0">{formatNumber(v.views)}</span>
                           <span className={`text-xs flex-shrink-0 ${v.engagement_rate > 8 ? "text-emerald-400" : "text-zinc-500"}`}>{v.engagement_rate}%</span>
@@ -515,7 +522,10 @@ export default function CompetitorsPage() {
                     {(["tiktok","instagram","youtube","facebook"] as Platform[]).filter(p => selected.accounts?.some(a => a.platform === p)).map(p => {
                       const cfg = PLATFORM_CONFIG[p]
                       return (
-                        <span key={p} className={`px-2 py-1 rounded text-[11px] font-medium ${cfg.bg} ${cfg.textColor} cursor-pointer`}>
+                        <span
+                          key={p}
+                          style={{ backgroundColor: cfg.bgColor, color: cfg.fgColor, padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: 500, cursor: "pointer" }}
+                        >
                           {cfg.label}
                         </span>
                       )
@@ -545,7 +555,7 @@ export default function CompetitorsPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3.5">
-                            <span className={`flex items-center gap-1 w-fit px-1.5 py-0.5 rounded text-[10px] font-medium ${platCfg.bg} ${platCfg.textColor}`}>
+                            <span style={{ backgroundColor: platCfg.bgColor, color: platCfg.fgColor, display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 500 }}>
                               <PlatformIcon platform={v.platform} className="w-2.5 h-2.5" />
                               {platCfg.label}
                             </span>
@@ -592,7 +602,7 @@ export default function CompetitorsPage() {
                                   <p className="text-sm font-medium text-zinc-200">{c.creator_handle}</p>
                                   {c.flagged_outreach && <Star className="w-3 h-3 text-amber-400 fill-amber-400" />}
                                 </div>
-                                <span className={`text-[10px] font-medium ${platCfg.textColor}`}>{platCfg.label}</span>
+                                <span style={{ color: platCfg.fgColor, fontSize: "10px", fontWeight: 500 }}>{platCfg.label}</span>
                               </div>
                             </div>
                           </td>
