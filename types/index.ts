@@ -25,7 +25,7 @@ export interface Alert {
   timestamp: string
 }
 
-export interface Campaign {
+export interface DashboardCampaign {
   id: string
   name: string
   status: "active" | "paused" | "completed" | "draft"
@@ -108,4 +108,56 @@ export interface AccountStats {
   totalViews: number
   avgEngagement: number
   activePlatforms: number
+}
+
+// ── Campaigns Module ──────────────────────────────────────────
+
+export type CampaignStatus = "draft" | "active" | "paused" | "completed"
+export type PayoutStatus = "pending" | "approved" | "on_hold" | "paid"
+export type CreatorStatus = "active" | "behind_schedule" | "completed" | "removed"
+
+export interface Campaign {
+  id: string
+  workspace_id: string | null
+  name: string
+  brand: string | null
+  status: CampaignStatus
+  start_date: string | null
+  end_date: string | null
+  target_views: number
+  target_videos: number
+  total_views: number
+  total_videos: number
+  total_payout: number
+  base_fee: number
+  cpm_rate: number
+  milestone_bonus: number
+  performance_cap: number
+  payout_window: number
+  brief: string | null
+  created_at: string
+}
+
+export interface CampaignCreator {
+  id: string
+  campaign_id: string
+  account_id: string
+  status: CreatorStatus
+  videos_posted: number
+  views_delivered: number
+  payout_earned: number
+  payout_status: PayoutStatus
+  last_posted_at: string | null
+  joined_at: string
+  // joined from tracked_accounts
+  account?: TrackedAccount
+}
+
+export interface CampaignAlert {
+  id: string
+  campaign_id: string
+  type: "warning" | "info" | "success" | "error"
+  message: string
+  is_read: boolean
+  created_at: string
 }
