@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/marketing/navbar"
 import { Hero } from "@/components/marketing/hero"
+import { SocialProof } from "@/components/marketing/social-proof"
 
 export default function LandingPage() {
   return (
@@ -7,6 +8,7 @@ export default function LandingPage() {
       <Navbar />
       <main>
         <Hero />
+        <SocialProof />
       </main>
     </div>
   )
