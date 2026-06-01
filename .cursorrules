@@ -1,0 +1,212 @@
+# TrackHive — Cursor AI Rules
+# Automatically loaded before every task. Read these before touching ANY file.
+
+## CRITICAL: Files that must NEVER be modified by AI unless user explicitly says so
+
+- `app/(dashboard)/layout.tsx` — hardened dashboard shell (inline styles only)
+- `app/globals.css` — CSS variables + html/body height anchors
+- `components/layout/sidebar.tsx` — sidebar with inline structural styles
+- `components/layout/topbar.tsx` — topbar with Base UI dropdown fix applied
+
+If the user says "fix the layout" or "restore the dashboard" — rewrite from the
+canonical structure below. DO NOT run `git checkout` on these files.
+
+---
+
+## CANONICAL DASHBOARD LAYOUT (app/(dashboard)/layout.tsx)
+
+```tsx
+"use client"
+import { useState } from "react"
+import { Sidebar } from "@/components/layout/sidebar"
+import { Topbar } from "@/components/layout/topbar"
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false)
+  return (
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#0a0a0a" }}>
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        <Topbar />
+        <main style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+          {children}
+        </main>
+      </div>
+    </div>
+  )
+}
+```
+
+RULES for layout changes:
+- ALL structural CSS (display, flex, height, overflow, background) must use inline `style={}` props
+- NEVER use Tailwind classes for layout structure — they get purged in production
+- NEVER add `overflow: hidden` to `<body>` — it breaks auth pages
+- `html` and `body` must keep `height: 100%` (set in globals.css, do not remove)
+
+---
+
+## CANONICAL SIDEBAR (components/layout/sidebar.tsx)
+
+The sidebar `<aside>` must always have these inline styles:
+```
+display: "flex", flexDirection: "column", flexShrink: 0,
+width: collapsed ? "60px" : "220px",
+height: "100vh",
+backgroundColor: "#111111",
+borderRight: "1px solid rgba(255,255,255,0.06)",
+position: "relative",
+transition: "width 300ms ease-in-out",
+overflow: "hidden"
+```
+
+The sidebar REQUIRES two props: `collapsed: boolean` and `onToggle: () => void`.
+NEVER call `<Sidebar />` without these props — it will cause a TypeScript error.
+
+---
+
+## CANONICAL TOPBAR (components/layout/topbar.tsx)
+
+### Base UI DropdownMenu rule — CRITICAL
+This project uses `@base-ui/react` for dropdowns (NOT Radix UI).
+In Base UI, `DropdownMenuLabel` maps to `MenuPrimitive.GroupLabel` which REQUIRES
+a `MenuPrimitive.Group` parent. Violating this throws:
+  "Base UI: MenuGroupContext is missing."
+
+**EVERY `DropdownMenuLabel` must be inside a `DropdownMenuGroup`.**
+
+Correct pattern:
+```tsx
+<DropdownMenuContent>
+  <DropdownMenuGroup>
+    <DropdownMenuLabel>Section title</DropdownMenuLabel>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem>Item</DropdownMenuItem>
+  </DropdownMenuGroup>
+</DropdownMenuContent>
+```
+
+Wrong (breaks at runtime):
+```tsx
+<DropdownMenuContent>
+  <DropdownMenuLabel>Section title</DropdownMenuLabel>  {/* ❌ crashes */}
+  <DropdownMenuItem>Item</DropdownMenuItem>
+</DropdownMenuContent>
+```
+
+### Sign-out rule
+`handleSignOut` must use `window.location.href = "/login"` (NOT `router.push`).
+Hard redirect ensures the cleared auth cookie is sent with the next request.
+
+```tsx
+async function handleSignOut() {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  await supabase.auth.signOut()
+  window.location.href = "/login"
+}
+```
+
+---
+
+## SUPABASE AUTH — Client selection rule
+
+| Context | Import | Session storage |
+|---------|--------|-----------------|
+| Client components | `createBrowserClient` from `@supabase/ssr` | **Cookies** ✅ |
+| Middleware | `createServerClient` from `@supabase/ssr` | **Cookies** ✅ |
+| ❌ WRONG | `createClient` from `@supabase/supabase-js` | localStorage ❌ |
+
+Using `createClient` (supabase-js) stores the session in localStorage. The
+middleware reads cookies. This causes a login loop where signin succeeds but
+every navigation to a protected route immediately redirects back to /login.
+
+`lib/supabase.ts` must export `createBrowserClient` from `@supabase/ssr`.
+
+After successful login, always redirect with:
+```ts
+window.location.href = "/dashboard"  // NOT router.push()
+```
+
+`router.push` does a client-side navigation before the cookie is committed.
+`window.location.href` forces a full page reload that sends the cookie.
+
+---
+
+## TAILWIND — Dynamic class names rule
+
+NEVER put Tailwind class strings inside JavaScript objects/arrays if they are
+the only place those classes appear. Tailwind's scanner cannot detect them and
+they will be purged (missing in production AND sometimes in dev JIT mode).
+
+```ts
+// ❌ WRONG — classes get purged
+const PLATFORM_CONFIG = {
+  tiktok: { bg: "bg-white/10", textColor: "text-white" }
+}
+<span className={`${cfg.bg} ${cfg.textColor}`}>
+
+// ✅ CORRECT — use actual CSS values in style prop
+const PLATFORM_CONFIG = {
+  tiktok: { bgColor: "rgba(255,255,255,0.1)", fgColor: "#ffffff" }
+}
+<span style={{ backgroundColor: cfg.bgColor, color: cfg.fgColor }}>
+```
+
+This pattern is already applied in `lib/platform.tsx`. Use `bgColor`/`fgColor`
+(real CSS values) everywhere platform badges are rendered.
+
+---
+
+## DARK THEME PALETTE
+
+| Token | Hex | Usage |
+|-------|-----|-------|
+| Background | `#0a0a0a` | Page background, layout root |
+| Sidebar | `#111111` | Sidebar, cards, dropdowns |
+| Elevated | `#1a1a1a` | Dropdown menus, modals |
+| Border | `rgba(255,255,255,0.06)` | Subtle dividers |
+| Primary | `#7C3AED` | Buttons, active states |
+| Text primary | `#fafafa` | Headings |
+| Text muted | `#71717a` | Secondary text |
+
+---
+
+## GENERAL CODING RULES
+
+1. **TypeScript**: no `any` types. Define proper interfaces in `types/index.ts`.
+2. **No Tailwind for structure**: use inline styles for layout-critical properties.
+3. **No `router.push` for auth**: use `window.location.href` after sign-in/out.
+4. **Supabase client**: always `createBrowserClient` in client components.
+5. **Every `DropdownMenuLabel` must be inside `DropdownMenuGroup`** (Base UI rule).
+6. **New pages**: match existing dark theme — `bg-[#111111]` cards, `border-white/[0.06]` borders.
+7. **Run `npm run build` after every feature** and fix all errors before committing.
+8. **Commit message**: `git add . && git commit -m "feature: description"`.
+
+---
+
+## MODULE STRUCTURE
+
+```
+app/
+  (auth)/          — login, signup, forgot-password (no layout wrapper)
+  (dashboard)/     — all protected routes, uses DashboardLayout
+  demo/            — public demo (no auth), uses DemoLayout
+  onboarding/      — post-signup flow (step-1, step-2, step-3)
+components/
+  layout/          — sidebar, topbar (CRITICAL — see rules above)
+  analytics/       — add-account-drawer, video-detail-drawer
+  campaigns/       — (campaign components)
+  payments/        — invite-creator-drawer, process-payout-modal, create-rule-drawer
+  competitors/     — add-competitor-drawer
+  demo/            — demo-banner, signup-gate-modal
+  ui/              — shadcn/base-ui component wrappers
+lib/
+  supabase.ts      — exports createBrowserClient instance (NOT createClient)
+  auth.ts          — getCurrentUser(), isAuthenticated(), signOut()
+  platform.tsx     — PLATFORM_CONFIG with bgColor/fgColor (real CSS values)
+  analytics-data.ts, campaigns-data.ts, payments-data.ts, trends-data.ts,
+  competitors-data.ts — Supabase data layer per module
+middleware.ts      — protects all dashboard routes, reads session from cookies
+```
