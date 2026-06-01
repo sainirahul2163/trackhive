@@ -1,13 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { useState, Suspense } from "react"
 import { Eye, EyeOff, Zap, ArrowRight, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const next = searchParams.get("next") ?? "/dashboard"
 
@@ -22,16 +21,32 @@ function LoginForm() {
     setError(null)
     setLoading(true)
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       })
+
+      console.log("[login] signInWithPassword result:", { data, authError })
+
       if (authError) {
+        console.error("[login] auth error:", authError.message)
         setError(authError.message)
         return
       }
-      router.push(next)
-      router.refresh()
+
+      if (!data.session) {
+        setError("Sign in succeeded but no session was returned. Please try again.")
+        return
+      }
+
+      // Hard redirect so the browser sends the fresh auth cookie with the
+      // next request — this lets the middleware confirm the session correctly.
+      console.log("[login] success, redirecting to:", next)
+      window.location.href = next
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unexpected error. Please try again."
+      console.error("[login] unexpected error:", err)
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -141,10 +156,8 @@ function LoginForm() {
           {/* Demo button */}
           <Link
             href="/demo"
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-zinc-300 hover:text-white transition-all"
-            style={{ border: "1px solid rgba(255,255,255,0.10)", backgroundColor: "transparent" }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-zinc-300 hover:text-white hover:bg-white/[0.04] transition-all"
+            style={{ border: "1px solid rgba(255,255,255,0.10)" }}
           >
             Try Demo Dashboard
           </Link>
