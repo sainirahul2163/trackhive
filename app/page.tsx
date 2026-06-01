@@ -4,6 +4,7 @@ import { SocialProof } from "@/components/marketing/social-proof"
 import { Features } from "@/components/marketing/features"
 import { HowItWorks } from "@/components/marketing/how-it-works"
 import { Pricing } from "@/components/marketing/pricing"
+import { Testimonials } from "@/components/marketing/testimonials"
 
 export default function LandingPage() {
   return (
@@ -15,6 +16,7 @@ export default function LandingPage() {
         <Features />
         <HowItWorks />
         <Pricing />
+        <Testimonials />
       </main>
     </div>
   )
