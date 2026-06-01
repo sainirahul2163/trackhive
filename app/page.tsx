@@ -1,29 +1,11 @@
-import { redirect } from "next/navigation"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { Navbar } from "@/components/marketing/navbar"
 
-export default async function RootPage() {
-  const cookieStore = cookies()
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    }
+export default function LandingPage() {
+  return (
+    <div style={{ minHeight: "100vh", backgroundColor: "#0a0a0a" }}>
+      <Navbar />
+      {/* Sections will be added here */}
+      <main style={{ paddingTop: "64px" }} />
+    </div>
   )
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  if (session) {
-    redirect("/dashboard")
-  } else {
-    redirect("/login")
-  }
 }
