@@ -6,8 +6,10 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, BarChart3, Megaphone, CreditCard,
   TrendingUp, Swords, Settings, ChevronLeft, ChevronRight, Zap,
+  Search, Bell,
 } from "lucide-react"
 import { DemoBanner } from "@/components/demo/demo-banner"
+import { SignupGateModal } from "@/components/demo/signup-gate-modal"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -22,6 +24,9 @@ const navItems = [
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
+  const [gateOpen, setGateOpen] = useState(false)
+  const [gateFeature, setGateFeature] = useState("this feature")
+  function openGate(f: string) { setGateFeature(f); setGateOpen(true) }
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100%", overflow: "hidden", backgroundColor: "#0a0a0a" }}>
@@ -94,11 +99,42 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
       {/* Main */}
       <div style={{ display: "flex", flexDirection: "column", flex: "1 1 0%", minWidth: 0, overflow: "hidden", backgroundColor: "#0a0a0a" }}>
         {/* Topbar */}
-        <header style={{ height: "56px", flexShrink: 0, backgroundColor: "#0a0a0a", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
-          <span className="text-sm text-zinc-500">Demo workspace</span>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors">Sign in</Link>
-            <Link href="/signup" className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-all">
+        <header style={{ height: "56px", flexShrink: 0, backgroundColor: "#0a0a0a", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", gap: "12px" }}>
+          {/* Search bar */}
+          <button
+            onClick={() => openGate("global search")}
+            style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, maxWidth: "320px", height: "34px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.03)", padding: "0 12px", cursor: "pointer" }}
+          >
+            <Search style={{ width: "13px", height: "13px", color: "#52525b", flexShrink: 0 }} />
+            <span style={{ fontSize: "13px", color: "#52525b", flex: 1, textAlign: "left" }}>Search creators, campaigns…</span>
+            <kbd style={{ fontSize: "10px", padding: "1px 5px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.1)", color: "#52525b", backgroundColor: "rgba(255,255,255,0.04)" }}>⌘K</kbd>
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
+            {/* Notification bell */}
+            <button
+              onClick={() => openGate("notifications")}
+              style={{ position: "relative", width: "34px", height: "34px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
+              <Bell style={{ width: "15px", height: "15px", color: "#71717a" }} />
+              <span style={{ position: "absolute", top: "6px", right: "6px", width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#ef4444", border: "1.5px solid #0a0a0a" }} />
+            </button>
+
+            <div style={{ width: "1px", height: "20px", backgroundColor: "rgba(255,255,255,0.08)" }} />
+
+            {/* User avatar */}
+            <button
+              onClick={() => openGate("account settings")}
+              style={{ width: "30px", height: "30px", borderRadius: "50%", backgroundColor: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.3)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+              title="Demo user"
+            >
+              <span style={{ fontSize: "10px", fontWeight: 700, color: "#a78bfa" }}>DM</span>
+            </button>
+
+            <div style={{ width: "1px", height: "20px", backgroundColor: "rgba(255,255,255,0.08)" }} />
+
+            <Link href="/login" className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors" style={{ fontSize: "13px", color: "#71717a", textDecoration: "none", whiteSpace: "nowrap" }}>Sign in</Link>
+            <Link href="/signup" style={{ padding: "7px 14px", borderRadius: "8px", backgroundColor: "#7C3AED", color: "white", fontSize: "12px", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
               Sign Up Free
             </Link>
           </div>
@@ -112,6 +148,8 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
       </div>
+
+      <SignupGateModal open={gateOpen} onClose={() => setGateOpen(false)} feature={gateFeature} />
     </div>
   )
 }
