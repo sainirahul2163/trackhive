@@ -127,7 +127,6 @@ function MobilePill({
         padding: "7px 14px",
         borderRadius: "20px",
         cursor: "pointer",
-        border: "none",
         whiteSpace: "nowrap",
         flexShrink: 0,
         backgroundColor: active ? "rgba(124,58,237,0.15)" : "rgba(255,255,255,0.04)",

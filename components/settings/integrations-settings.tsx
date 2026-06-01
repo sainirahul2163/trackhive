@@ -7,14 +7,6 @@ import { toast, Toaster } from "sonner"
 /* ── Integration card types ──────────────────────────── */
 type ConnectStatus = "connected" | "disconnected" | "coming_soon"
 
-interface Integration {
-  id: string
-  name: string
-  description: string
-  status: ConnectStatus
-  icon: React.ReactNode
-}
-
 /* ── Toggle component ────────────────────────────────── */
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
