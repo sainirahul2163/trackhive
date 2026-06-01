@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { CmdKSearch } from "@/components/ui/cmd-search"
 import {
   Eye,
@@ -303,9 +304,9 @@ export default function DashboardPage() {
         <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-[15px] font-semibold text-white">Recent Alerts</h2>
-            <button className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-              View all
-            </button>
+            <Link href="/notifications" className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
+              View all →
+            </Link>
           </div>
           <div className="space-y-3">
             {recentAlerts.map((alert) => (

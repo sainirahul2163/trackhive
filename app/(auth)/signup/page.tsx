@@ -1,10 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { Eye, EyeOff, Zap, ArrowRight, Loader2, Check } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { createBrowserClient } from "@supabase/ssr"
 
 type Role = "brand" | "agency" | "creator" | ""
 
@@ -32,7 +31,6 @@ const ROLES: Array<{ value: Role; label: string; desc: string }> = [
 ]
 
 export default function SignupPage() {
-  const router = useRouter()
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -49,6 +47,10 @@ export default function SignupPage() {
     if (password.length < 6) { setError("Password must be at least 6 characters."); return }
     setLoading(true)
     try {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
       const { error: authError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -57,7 +59,8 @@ export default function SignupPage() {
         },
       })
       if (authError) { setError(authError.message); return }
-      router.push("/onboarding/step-1")
+      // Hard redirect so the auth cookie is committed before the next request
+      window.location.href = "/onboarding/step-1"
     } finally {
       setLoading(false)
     }
@@ -217,9 +220,9 @@ export default function SignupPage() {
           {/* Terms */}
           <p className="text-center text-[11px] text-zinc-600 mt-4 leading-relaxed">
             By signing up you agree to our{" "}
-            <Link href="#" className="text-zinc-500 hover:text-zinc-300 underline underline-offset-2">Terms</Link>
+            <Link href="/terms" className="text-zinc-500 hover:text-zinc-300 underline underline-offset-2">Terms</Link>
             {" "}&amp;{" "}
-            <Link href="#" className="text-zinc-500 hover:text-zinc-300 underline underline-offset-2">Privacy Policy</Link>
+            <Link href="/privacy" className="text-zinc-500 hover:text-zinc-300 underline underline-offset-2">Privacy Policy</Link>
           </p>
         </div>
 

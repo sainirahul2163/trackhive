@@ -44,8 +44,8 @@ const FOOTER_LINKS = {
     { label: "Demo Dashboard", href: "/demo" },
   ],
   Legal: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Service", href: "/terms" },
     { label: "Cookie Policy", href: "#" },
     { label: "GDPR", href: "#" },
   ],
@@ -216,9 +216,13 @@ function Footer() {
             © {new Date().getFullYear()} TrackHive, Inc. All rights reserved.
           </span>
           <div style={{ display: "flex", gap: "20px" }}>
-            {["Privacy", "Terms", "Cookies"].map(item => (
-              <Link key={item} href="#" style={{ fontSize: "12px", color: "#3f3f46", textDecoration: "none", transition: "color 0.15s" }} className="hover:text-zinc-500">
-                {item}
+            {[
+              { label: "Privacy", href: "/privacy" },
+              { label: "Terms",   href: "/terms" },
+              { label: "Changelog", href: "/changelog" },
+            ].map(item => (
+              <Link key={item.label} href={item.href} style={{ fontSize: "12px", color: "#3f3f46", textDecoration: "none", transition: "color 0.15s" }} className="hover:text-zinc-500">
+                {item.label}
               </Link>
             ))}
           </div>
