@@ -142,7 +142,7 @@ type Tab = typeof TABS[number]
 export default function DemoPaymentsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("Overview")
   const [payouts, setPayouts] = useState<MockPayout[]>(INIT_PAYOUTS)
-  const [rules, setRules] = useState<MockRule[]>(INIT_RULES)
+  const [rules] = useState<MockRule[]>(INIT_RULES)
   const [historySearch, setHistorySearch] = useState("")
   const [gateOpen, setGateOpen] = useState(false)
   const [gateFeature, setGateFeature] = useState("this feature")

@@ -95,13 +95,6 @@ function MiniLabel({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: "9px", fontWeight: 600, color: "#52525b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>{children}</div>
 }
 
-function SparkBar({ pct, color = "#7C3AED" }: { pct: number; color?: string }) {
-  return (
-    <div style={{ flex: 1, height: "100%", borderRadius: "2px 2px 0 0", backgroundColor: `${color}33` }}>
-      <div style={{ height: `${pct}%`, borderRadius: "2px 2px 0 0", backgroundColor: color, marginTop: "auto" }} />
-    </div>
-  )
-}
 
 function AnalyticsMock() {
   const rows = [

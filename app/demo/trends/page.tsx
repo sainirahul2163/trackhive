@@ -3,9 +3,9 @@
 import { useState, useMemo } from "react"
 import {
   Search, Bookmark, BookmarkCheck, Play, TrendingUp,
-  Sparkles, Copy, Download, ArrowRight, Plus,
+  Sparkles, ArrowRight, Plus,
   ChevronDown, Flame, BarChart2, Lightbulb, AlertTriangle,
-  Send, Check,
+  Check,
 } from "lucide-react"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -202,10 +202,7 @@ export default function DemoTrendsPage() {
 
   // Library state
   const [savedVideoIds, setSavedVideoIds] = useState<Set<string>>(new Set())
-  const [boards, setBoards] = useState<Board[]>(INIT_BOARDS)
-  const [showBoardDropdown, setShowBoardDropdown] = useState<string | null>(null)
-  const [showNewBoard, setShowNewBoard] = useState(false)
-  const [newBoardName, setNewBoardName] = useState("")
+  const [boards] = useState<Board[]>(INIT_BOARDS)
   const [search, setSearch] = useState("")
   const [platFilter, setPlatFilter] = useState<Platform | "all">("all")
   const [nicheFilter, setNicheFilter] = useState<TrendNiche | "all">("all")
@@ -216,7 +213,7 @@ export default function DemoTrendsPage() {
   const [briefStep, setBriefStep] = useState<1 | 2 | 3>(1)
   const [selectedForBrief, setSelectedForBrief] = useState<Set<string>>(new Set())
   const [briefForm, setBriefForm] = useState({ brand: "", product: "", goal: "", audience: "", tone: "", platform: "" })
-  const [copiedBrief, setCopiedBrief] = useState(false)
+
 
   const filtered = useMemo(() => {
     let list = MOCK_VIDEOS.filter(v => {

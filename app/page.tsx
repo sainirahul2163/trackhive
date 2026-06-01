@@ -6,6 +6,7 @@ import { HowItWorks } from "@/components/marketing/how-it-works"
 import { Pricing } from "@/components/marketing/pricing"
 import { Testimonials } from "@/components/marketing/testimonials"
 import { FAQ } from "@/components/marketing/faq"
+import { CTAAndFooter } from "@/components/marketing/cta-footer"
 
 export default function LandingPage() {
   return (
@@ -20,6 +21,7 @@ export default function LandingPage() {
         <Testimonials />
         <FAQ />
       </main>
+      <CTAAndFooter />
     </div>
   )
 }

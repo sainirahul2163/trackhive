@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import {
-  Plus, Globe, Eye, Users, TrendingUp, BarChart2,
+  Plus, Eye, Users, TrendingUp, BarChart2,
   Star, StarOff, ChevronRight, Sparkles,
   ArrowUpRight, ArrowDownRight, Clock, X, Check, ExternalLink,
 } from "lucide-react"
@@ -188,12 +188,12 @@ function ChartTooltip({ active, payload, label }: ChartTTProps) {
 
 // ── Main component ────────────────────────────────────────────
 export default function DemoCompetitorsPage() {
-  const [competitors, setCompetitors] = useState<Competitor[]>(MOCK_COMPETITORS)
+  const [competitors] = useState<Competitor[]>(MOCK_COMPETITORS)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>("Overview")
   const [weeklyData] = useState(buildWeeklyData)
   const [expandedReport, setExpandedReport] = useState<string | null>(null)
-  const [generatingReport, setGeneratingReport] = useState(false)
+  const [generatingReport] = useState(false)
   const [gateOpen, setGateOpen] = useState(false)
   const [gateFeature, setGateFeature] = useState("this feature")
 
