@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Zap, Check, Mail, MessageSquare, Hash } from "lucide-react"
+import { Zap, Check, Mail, MessageSquare, Hash, ArrowLeft } from "lucide-react"
+import { toast, Toaster } from "sonner"
+import confetti from "canvas-confetti"
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -23,34 +25,42 @@ function StepIndicator({ current }: { current: number }) {
   )
 }
 
-function ConfettiPiece({ style }: { style: React.CSSProperties }) {
-  return <div style={{ position: "fixed", width: "8px", height: "8px", borderRadius: "2px", pointerEvents: "none", ...style }} />
-}
-
-const CONFETTI_COLORS = ["#7C3AED", "#a855f7", "#10b981", "#f59e0b", "#3b82f6", "#ec4899"]
-
 export default function OnboardingStep3() {
   const router = useRouter()
   const [alertMethod, setAlertMethod] = useState<"email" | "slack" | "discord">("email")
   const [discordWebhook, setDiscordWebhook] = useState("")
   const [finishing, setFinishing] = useState(false)
   const [done, setDone] = useState(false)
-  const [confetti, setConfetti] = useState<Array<{ id: number; style: React.CSSProperties }>>([])
 
   function launchConfetti() {
-    const pieces = Array.from({ length: 60 }, (_, i) => ({
-      id: i,
-      style: {
-        left: `${Math.random() * 100}vw`,
-        top: `-10px`,
-        backgroundColor: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-        animation: `fall ${1.5 + Math.random() * 2}s ease-in ${Math.random() * 0.8}s forwards`,
-        transform: `rotate(${Math.random() * 360}deg)`,
-        zIndex: 9999,
-      } as React.CSSProperties,
-    }))
-    setConfetti(pieces)
-    setTimeout(() => setConfetti([]), 4000)
+    const end = Date.now() + 2200
+
+    const frame = () => {
+      confetti({
+        particleCount: 4,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.65 },
+        colors: ["#7C3AED", "#a855f7", "#10b981", "#f59e0b", "#3b82f6", "#ec4899"],
+      })
+      confetti({
+        particleCount: 4,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.65 },
+        colors: ["#7C3AED", "#a855f7", "#10b981", "#f59e0b", "#3b82f6", "#ec4899"],
+      })
+      if (Date.now() < end) requestAnimationFrame(frame)
+    }
+    frame()
+  }
+
+  function handleSlackClick() {
+    setAlertMethod("slack")
+    toast("Coming soon", {
+      description: "Slack integration will be available in the next release.",
+      duration: 3000,
+    })
   }
 
   function handleFinish() {
@@ -58,20 +68,24 @@ export default function OnboardingStep3() {
     setTimeout(() => {
       setDone(true)
       launchConfetti()
-      setTimeout(() => router.push("/dashboard"), 2200)
+      setTimeout(() => router.push("/dashboard"), 2400)
     }, 800)
   }
 
   return (
     <>
-      {/* Confetti */}
-      <style>{`@keyframes fall { to { transform: translateY(110vh) rotate(720deg); opacity: 0; } }`}</style>
-      {confetti.map(c => <ConfettiPiece key={c.id} style={c.style} />)}
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" },
+        }}
+      />
 
       <div style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
         <div style={{ position: "fixed", inset: 0, background: "radial-gradient(ellipse at top left, rgba(124,58,237,0.15) 0%, transparent 60%)", pointerEvents: "none" }} />
 
         <div style={{ width: "100%", maxWidth: "480px", position: "relative", zIndex: 10 }}>
+          {/* Logo */}
           <div className="flex items-center justify-center gap-2.5 mb-6">
             <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
               <Zap className="w-4 h-4 text-white" fill="white" />
@@ -85,12 +99,12 @@ export default function OnboardingStep3() {
             {!done ? (
               <>
                 <div className="text-center mb-6">
-                  <h1 className="text-[22px] font-semibold text-white mb-1.5">Setup alerts</h1>
+                  <h1 className="text-[22px] font-semibold text-white mb-1.5">Setup your alerts</h1>
                   <p className="text-sm text-zinc-500">Get notified when creators post or campaigns hit milestones.</p>
                 </div>
 
                 <div className="space-y-3">
-                  {/* Email (default) */}
+                  {/* Email (default selected) */}
                   <button
                     onClick={() => setAlertMethod("email")}
                     style={{
@@ -114,9 +128,9 @@ export default function OnboardingStep3() {
                     )}
                   </button>
 
-                  {/* Slack */}
+                  {/* Slack — shows "Coming soon" toast on click */}
                   <button
-                    onClick={() => setAlertMethod("slack")}
+                    onClick={handleSlackClick}
                     style={{
                       width: "100%", padding: "14px 16px", borderRadius: "10px", textAlign: "left", cursor: "pointer", transition: "all 0.15s",
                       border: alertMethod === "slack" ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(255,255,255,0.08)",
@@ -130,7 +144,7 @@ export default function OnboardingStep3() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <p style={{ fontSize: "14px", fontWeight: 600, color: alertMethod === "slack" ? "#4ade80" : "#e4e4e7" }}>Connect Slack</p>
-                        <span style={{ fontSize: "10px", fontWeight: 600, color: "#71717a", backgroundColor: "rgba(255,255,255,0.06)", padding: "1px 6px", borderRadius: "4px" }}>OAuth</span>
+                        <span style={{ fontSize: "10px", fontWeight: 600, color: "#71717a", backgroundColor: "rgba(255,255,255,0.06)", padding: "1px 6px", borderRadius: "4px" }}>Coming soon</span>
                       </div>
                       <p style={{ fontSize: "12px", color: "#71717a", marginTop: "1px" }}>Post alerts to a Slack channel</p>
                     </div>
@@ -165,7 +179,7 @@ export default function OnboardingStep3() {
                     )}
                   </button>
 
-                  {/* Discord webhook input */}
+                  {/* Discord webhook URL input */}
                   {alertMethod === "discord" && (
                     <input
                       type="url"
@@ -188,6 +202,13 @@ export default function OnboardingStep3() {
                   ) : (
                     <><Check className="w-4 h-4" /> Finish Setup</>
                   )}
+                </button>
+
+                <button
+                  onClick={() => router.push("/onboarding/step-2")}
+                  className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  <ArrowLeft className="w-3 h-3" /> Back
                 </button>
               </>
             ) : (

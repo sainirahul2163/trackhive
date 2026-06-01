@@ -43,6 +43,7 @@ export default function OnboardingStep1() {
 
   function handleContinue() {
     if (!company.trim() || !teamSize || !goal) return
+    localStorage.setItem("onboarding", JSON.stringify({ company: company.trim(), website: website.trim(), teamSize, goal }))
     router.push("/onboarding/step-2")
   }
 

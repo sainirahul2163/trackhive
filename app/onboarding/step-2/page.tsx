@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
-import { Zap, ArrowRight, Link as LinkIcon } from "lucide-react"
+import { Zap, ArrowRight, ArrowLeft, Link as LinkIcon } from "lucide-react"
 import { PlatformIcon, PLATFORM_CONFIG } from "@/lib/platform"
 import type { Platform } from "@/types"
 
@@ -153,6 +153,12 @@ export default function OnboardingStep2() {
               className="w-full py-2.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               Skip for now
+            </button>
+            <button
+              onClick={() => router.push("/onboarding/step-1")}
+              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              <ArrowLeft className="w-3 h-3" /> Back
             </button>
           </div>
         </div>
