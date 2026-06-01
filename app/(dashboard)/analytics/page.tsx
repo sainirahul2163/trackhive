@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Plus, Search, RefreshCw, Trash2, Eye,
   Users, TrendingUp, Globe, ChevronDown, AlertCircle,
@@ -10,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AddAccountDrawer } from "@/components/analytics/add-account-drawer"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
+import { CmdKSearch } from "@/components/ui/cmd-search"
 import { fetchTrackedAccounts } from "@/lib/analytics-data"
 import { supabase } from "@/lib/supabase"
 import type { TrackedAccount, Platform } from "@/types"
@@ -66,6 +68,7 @@ function TableSkeleton() {
 }
 
 export default function AnalyticsPage() {
+  const router = useRouter()
   const [accounts, setAccounts] = useState<TrackedAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -131,6 +134,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-5 max-w-7xl">
+      <CmdKSearch />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -273,7 +277,11 @@ export default function AnalyticsPage() {
                 {filtered.map((account) => {
                   const cfg = PLATFORM_CONFIG[account.platform]
                   return (
-                    <tr key={account.id} className="hover:bg-white/[0.02] transition-colors group">
+                    <tr
+                      key={account.id}
+                      onClick={() => router.push(`/analytics/${account.id}`)}
+                      className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                    >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <Avatar className="w-8 h-8 flex-shrink-0">
@@ -316,7 +324,7 @@ export default function AnalyticsPage() {
                           <span className="text-xs text-zinc-500">{timeAgo(account.last_synced_at)}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Link
                             href={`/analytics/${account.id}`}

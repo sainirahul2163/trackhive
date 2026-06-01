@@ -1,5 +1,6 @@
 "use client"
 
+import { CmdKSearch } from "@/components/ui/cmd-search"
 import {
   Eye,
   Megaphone,
@@ -198,6 +199,7 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
 export default function DashboardPage() {
   return (
     <div className="space-y-6 max-w-7xl">
+      <CmdKSearch />
       {/* Header */}
       <div>
         <h1 className="text-[22px] font-semibold text-white tracking-tight">Dashboard</h1>
