@@ -45,6 +45,7 @@ export async function middleware(request: NextRequest) {
     "/competitors",
     "/settings",
     "/onboarding",
+    "/creator",
   ]
   const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p))
 
