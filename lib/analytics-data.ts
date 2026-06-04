@@ -33,6 +33,43 @@ export async function fetchTrackedVideos(accountId: string): Promise<TrackedVide
   return data as TrackedVideo[]
 }
 
+export interface DailyViewsPoint {
+  date:     string
+  views:    number
+  likes:    number
+  comments: number
+  shares:   number
+}
+
+export async function fetchDailyStats(accountId: string, days = 30): Promise<DailyViewsPoint[]> {
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+
+  const { data, error } = await supabase
+    .from("video_daily_stats")
+    .select("date, views, likes, comments, shares, tracked_videos!inner(account_id)")
+    .eq("tracked_videos.account_id", accountId)
+    .gte("date", since.toISOString().slice(0, 10))
+    .order("date", { ascending: true })
+
+  if (error) throw new Error(error.message)
+
+  // Group by date and sum all videos
+  const byDate = new Map<string, DailyViewsPoint>()
+  for (const row of (data ?? []) as (DailyViewsPoint & { tracked_videos: unknown })[]) {
+    const existing = byDate.get(row.date)
+    if (existing) {
+      existing.views    += row.views
+      existing.likes    += row.likes
+      existing.comments += row.comments
+      existing.shares   += row.shares
+    } else {
+      byDate.set(row.date, { date: row.date, views: row.views, likes: row.likes, comments: row.comments, shares: row.shares })
+    }
+  }
+  return Array.from(byDate.values())
+}
+
 export async function insertTrackedAccount(
   account: Omit<TrackedAccount, "id" | "created_at">
 ): Promise<TrackedAccount> {

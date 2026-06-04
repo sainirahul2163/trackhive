@@ -116,6 +116,22 @@ export default function AnalyticsPage() {
     activePlatforms: new Set(accounts.map((a) => a.platform)).size,
   }
 
+  const [syncingId, setSyncingId] = useState<string | null>(null)
+
+  async function handleSync(id: string) {
+    setSyncingId(id)
+    try {
+      await fetch("/api/sync", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ accountId: id }),
+      })
+      await load()
+    } finally {
+      setSyncingId(null)
+    }
+  }
+
   async function handleRemove(id: string) {
     setAccounts((prev) => prev.filter((a) => a.id !== id))
     await supabase.from("tracked_accounts").delete().eq("id", id)
@@ -334,10 +350,12 @@ export default function AnalyticsPage() {
                             <Eye className="w-3.5 h-3.5" />
                           </Link>
                           <button
-                            className="p-1.5 rounded-md hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-200 transition-colors"
-                            title="Sync"
+                            onClick={() => handleSync(account.id)}
+                            disabled={syncingId === account.id}
+                            className="p-1.5 rounded-md hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-200 transition-colors disabled:opacity-50"
+                            title="Sync now"
                           >
-                            <RefreshCw className="w-3.5 h-3.5" />
+                            <RefreshCw className={`w-3.5 h-3.5 ${syncingId === account.id ? "animate-spin" : ""}`} />
                           </button>
                           <button
                             onClick={() => handleRemove(account.id)}

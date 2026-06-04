@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/lib/platform"
 import { VideoDetailDrawer } from "@/components/analytics/video-detail-drawer"
-import { fetchTrackedAccount, fetchTrackedVideos } from "@/lib/analytics-data"
+import { fetchTrackedAccount, fetchTrackedVideos, fetchDailyStats, type DailyViewsPoint } from "@/lib/analytics-data"
 import type { TrackedAccount, TrackedVideo, Platform } from "@/types"
 
 /* ─── Deterministic mock helpers ────────────────────── */
@@ -248,6 +248,17 @@ function StatCard({ label, value, icon: Icon, color, bg, change, up }: {
 /* ─── Page ───────────────────────────────────────────── */
 const DATE_TABS = [{ label: "7D", days: 7 }, { label: "30D", days: 30 }, { label: "90D", days: 90 }]
 
+function timeAgo(iso: string | null): string {
+  if (!iso) return "Never"
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "Just now"
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
 function formatDate(iso: string | null) {
   if (!iso) return "—"
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -257,39 +268,68 @@ export default function AccountDetailPage() {
   const params = useParams()
   const id = params.id as string
 
-  const [account, setAccount] = useState<TrackedAccount | null>(null)
-  const [videos, setVideos] = useState<TrackedVideo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [account,    setAccount]    = useState<TrackedAccount | null>(null)
+  const [videos,     setVideos]     = useState<TrackedVideo[]>([])
+  const [dailyStats, setDailyStats] = useState<DailyViewsPoint[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [syncing,    setSyncing]    = useState(false)
+  const [error,      setError]      = useState<string | null>(null)
   const [activeDays, setActiveDays] = useState(30)
-  const [chartTab, setChartTab] = useState<ChartTab>("views")
-  const [selectedVideo, setSelectedVideo] = useState<TrackedVideo | null>(null)
-  const [videoDrawerOpen, setVideoDrawerOpen] = useState(false)
+  const [chartTab,   setChartTab]   = useState<ChartTab>("views")
+  const [selectedVideo,    setSelectedVideo]    = useState<TrackedVideo | null>(null)
+  const [videoDrawerOpen,  setVideoDrawerOpen]  = useState(false)
   const [campaignModalOpen, setCampaignModalOpen] = useState(false)
-  const [videoSort, setVideoSort] = useState<"views" | "virality" | "date">("views")
-
-  const chartData = useMemo(() => buildChartData(90, id.charCodeAt(0)), [id])
+  const [videoSort,  setVideoSort]  = useState<"views" | "virality" | "date">("views")
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [acct, vids] = await Promise.all([
+      const [acct, vids, daily] = await Promise.all([
         fetchTrackedAccount(id),
         fetchTrackedVideos(id),
+        fetchDailyStats(id, 90),
       ])
       setAccount(acct)
       setVideos(vids.length > 0 ? vids : buildMockVideos(id))
+      setDailyStats(daily)
     } catch {
-      // Supabase not set up yet — fall back to rich mock data
+      // Supabase not available yet — fall back to rich mock data
       setAccount(buildMockAccount(id))
       setVideos(buildMockVideos(id))
+      setDailyStats([])
     } finally {
       setLoading(false)
     }
   }, [id])
 
   useEffect(() => { load() }, [load])
+
+  async function handleSyncNow() {
+    setSyncing(true)
+    try {
+      await fetch("/api/sync", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ accountId: id }),
+      })
+      await load()
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Build chart data: prefer real daily stats, fall back to mock
+  const chartData = useMemo(() => {
+    if (dailyStats.length > 0) {
+      return dailyStats.map((d) => ({
+        date:      new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        views:     d.views,
+        followers: 0,
+      }))
+    }
+    return buildChartData(90, id.charCodeAt(0))
+  }, [dailyStats, id])
 
   const displayData = chartData.slice(-activeDays)
   const engagementData = useMemo(() => buildEngagementData(videos), [videos])
@@ -368,6 +408,9 @@ export default function AccountDetailPage() {
             </div>
             <p className="text-sm text-zinc-500">@{account.username} · {formatNumber(account.follower_count)} followers</p>
             <p className="text-xs text-zinc-600 mt-0.5">Est. monthly revenue: <span className="text-emerald-400 font-semibold">${parseInt(estMonthly).toLocaleString()}</span></p>
+            {account.last_synced_at && (
+              <p className="text-xs text-zinc-600 mt-0.5">Last synced: <span className="text-zinc-500">{timeAgo(account.last_synced_at)}</span></p>
+            )}
           </div>
         </div>
 
@@ -384,8 +427,13 @@ export default function AccountDetailPage() {
               <ExternalLink className="w-3.5 h-3.5" /> Profile
             </a>
           )}
-          <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-all">
-            <RefreshCw className="w-3.5 h-3.5" /> Sync
+          <button
+            onClick={handleSyncNow}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-sm font-medium transition-all"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing…" : "Sync Now"}
           </button>
         </div>
       </div>
