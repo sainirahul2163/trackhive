@@ -65,11 +65,15 @@ export interface TrackedAccount {
   avatar_url: string | null
   profile_url: string | null
   follower_count: number
-  total_views: number
-  avg_views: number
+  /** null when platform does not expose view counts (e.g. Instagram) */
+  total_views: number | null
+  /** null when platform does not expose view counts */
+  avg_views: number | null
   engagement_rate: number
   last_synced_at: string | null
   created_at: string
+  /** false for Instagram — Meta does not provide view counts to 3rd-party apps */
+  views_available?: boolean
 }
 
 export type ViralityLabel = "Hot" | "Rising" | "Normal"
@@ -81,7 +85,8 @@ export interface TrackedVideo {
   video_url: string
   thumbnail_url: string | null
   caption: string | null
-  views: number
+  /** null when platform does not expose view counts (Instagram) */
+  views: number | null
   likes: number
   comments: number
   shares: number

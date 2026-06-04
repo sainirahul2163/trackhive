@@ -46,16 +46,25 @@ export interface InstagramUserInfo {
   follower_count:  number
   following_count: number
   post_count:      number
+  /** Always false — Meta does not expose view counts to third-party apps */
+  views_available: false
+  /** Pre-calculated: average (likes + comments) / followers * 100 across recent posts */
+  engagement_rate: number
 }
 
 export interface InstagramPost {
-  id:         string
-  caption:    string
-  thumbnail:  string
-  views:      number
-  likes:      number
-  comments:   number
-  created_at: string
+  id:              string
+  caption:         string
+  thumbnail:       string
+  /** Always null — Instagram does not expose view counts to third-party apps */
+  views:           null
+  /** Always false */
+  views_available: false
+  likes:           number
+  comments:        number
+  /** Per-post engagement: (likes + comments) / followers * 100 */
+  engagement_rate: number
+  created_at:      string
 }
 
 export interface YouTubeChannelInfo {
@@ -227,6 +236,8 @@ export async function getTikTokUserVideos(username: string, depth = 1): Promise<
 
 // ─── 3. Instagram User Info ───────────────────────────────────────────────────
 // Uses /instagram/user/detailed-info (10 units) — has follower counts.
+// NOTE: Instagram does NOT provide view counts to third-party apps via EnsembleData.
+//       Only likes, comments, followers, and post counts are available.
 
 export async function getInstagramUserInfo(username: string): Promise<InstagramUserInfo> {
   const cacheKey = `ig:info:${username}`
@@ -235,13 +246,31 @@ export async function getInstagramUserInfo(username: string): Promise<InstagramU
 
   const raw = await ed<IGDetailedRaw>("/instagram/user/detailed-info", { username })
 
+  const followerCount = raw.edge_followed_by?.count ?? 0
+
+  // Try to fetch recent posts for engagement rate calculation
+  let engagementRate = 0
+  try {
+    const posts = await ed<IGPostsRaw>("/instagram/user/posts", { username })
+    const nodes = posts?.posts ?? []
+    if (nodes.length > 0 && followerCount > 0) {
+      const totalLikes    = nodes.reduce((s, { node: p }) => s + (p.edge_liked_by?.count ?? 0), 0)
+      const totalComments = nodes.reduce((s, { node: p }) => s + (p.edge_media_to_comment?.count ?? 0), 0)
+      engagementRate = Math.round(((totalLikes + totalComments) / nodes.length / followerCount) * 100 * 100) / 100
+    }
+  } catch {
+    // Non-fatal — engagement rate stays 0 if posts can't be fetched
+  }
+
   const result: InstagramUserInfo = {
     username:        raw.username,
     full_name:       raw.full_name ?? "",
     avatar_url:      raw.profile_pic_url ?? "",
-    follower_count:  raw.edge_followed_by?.count            ?? 0,
+    follower_count:  followerCount,
     following_count: raw.edge_follow?.count                 ?? 0,
     post_count:      raw.edge_owner_to_timeline_media?.count ?? 0,
+    views_available: false,
+    engagement_rate: engagementRate,
   }
 
   toCache(cacheKey, result)
@@ -249,26 +278,58 @@ export async function getInstagramUserInfo(username: string): Promise<InstagramU
 }
 
 // ─── 4. Instagram User Posts ──────────────────────────────────────────────────
+// NOTE: `views` is always null — Instagram does not expose view counts to
+//       third-party applications. Engagement rate is calculated from
+//       (likes + comments) / followers * 100.
 
-export async function getInstagramUserPosts(username: string): Promise<InstagramPost[]> {
+export async function getInstagramUserPosts(
+  username:      string,
+  followerCount = 0,
+): Promise<InstagramPost[]> {
   const cacheKey = `ig:posts:${username}`
   const cached = fromCache<InstagramPost[]>(cacheKey)
   if (cached) return cached
 
   const raw = await ed<IGPostsRaw>("/instagram/user/posts", { username })
 
-  const posts: InstagramPost[] = (raw?.posts ?? []).map(({ node: p }) => ({
-    id:         p.id,
-    caption:    p.edge_media_to_caption?.edges?.[0]?.node?.text ?? "",
-    thumbnail:  p.thumbnail_src || p.display_url || "",
-    views:      p.video_view_count ?? 0,
-    likes:      p.edge_liked_by?.count         ?? 0,
-    comments:   p.edge_media_to_comment?.count ?? 0,
-    created_at: new Date(p.taken_at_timestamp * 1000).toISOString(),
-  }))
+  const posts: InstagramPost[] = (raw?.posts ?? []).map(({ node: p }) => {
+    const likes    = p.edge_liked_by?.count         ?? 0
+    const comments = p.edge_media_to_comment?.count ?? 0
+    const engRate  = followerCount > 0
+      ? Math.round(((likes + comments) / followerCount) * 100 * 100) / 100
+      : 0
+
+    return {
+      id:              p.id,
+      caption:         p.edge_media_to_caption?.edges?.[0]?.node?.text ?? "",
+      thumbnail:       p.thumbnail_src || p.display_url || "",
+      views:           null,           // Instagram does not provide view counts
+      views_available: false,
+      likes,
+      comments,
+      engagement_rate: engRate,
+      created_at:      new Date(p.taken_at_timestamp * 1000).toISOString(),
+    }
+  })
 
   toCache(cacheKey, posts)
   return posts
+}
+
+// ─── Platform capability map ──────────────────────────────────────────────────
+
+export const PLATFORM_LIMITATIONS = {
+  instagram: { views: false,  saves: false, shares: false },
+  tiktok:    { views: true,   saves: false, shares: true  },
+  youtube:   { views: true,   saves: false, shares: false },
+  facebook:  { views: false,  saves: false, shares: false },
+} as const
+
+export type PlatformId = keyof typeof PLATFORM_LIMITATIONS
+
+/** Returns true when the given platform exposes view counts to third-party apps */
+export function platformHasViews(platform: string): boolean {
+  return (PLATFORM_LIMITATIONS as Record<string, { views: boolean }>)[platform]?.views ?? false
 }
 
 // ─── 5. YouTube Channel Info ──────────────────────────────────────────────────

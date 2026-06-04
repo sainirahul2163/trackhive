@@ -76,7 +76,7 @@ export function VideoDetailDrawer({ video, open, onOpenChange }: VideoDetailDraw
   const [newTag, setNewTag] = useState("")
   const [copied, setCopied] = useState(false)
 
-  const sparkData = video ? generateSparkline(video.views) : []
+  const sparkData = video ? generateSparkline(video.views ?? 0) : []
   const vl = video ? viralityLabel(video.virality_score) : null
   const cfg = video ? PLATFORM_CONFIG[video.platform] : null
   const allTags = [...(video?.tags ?? []), ...tags]

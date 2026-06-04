@@ -6,7 +6,9 @@ import {
   getInstagramUserInfo,
   getInstagramUserPosts,
   EnsembleDataError,
+  PLATFORM_LIMITATIONS,
 } from "@/lib/ensembledata"
+
 
 interface TrackedAccountRow {
   id:             string
@@ -85,7 +87,7 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json(result)
+  return NextResponse.json({ ...result, platform_limitations: PLATFORM_LIMITATIONS })
 }
 
 // ─── TikTok sync ──────────────────────────────────────────────────────────────
@@ -158,22 +160,23 @@ async function syncTikTok(
 }
 
 // ─── Instagram sync ───────────────────────────────────────────────────────────
+// NOTE: Instagram does NOT expose view counts to third-party apps.
+//       Engagement rate is calculated as (likes + comments) / followers * 100.
+//       total_views and avg_views are stored as null for Instagram.
 
 async function syncInstagram(
   supabase: ReturnType<typeof createServerSupabase>,
   account:  TrackedAccountRow,
 ) {
-  const [info, posts] = await Promise.all([
-    getInstagramUserInfo(account.username),
-    getInstagramUserPosts(account.username),
-  ])
+  const info  = await getInstagramUserInfo(account.username)
+  const posts = await getInstagramUserPosts(account.username, info.follower_count)
 
-  const totalViews = posts.reduce((s, p) => s + p.views, 0)
-  const avgViews   = posts.length ? Math.round(totalViews / posts.length) : 0
-  const engRate    = computeEngagementRate(posts.map((p) => ({
-    views: p.views || info.follower_count,
-    likes: p.likes, comments: p.comments, shares: 0,
-  })))
+  // Engagement rate = avg((likes + comments) / followers) across recent posts
+  const engRate = info.follower_count > 0 && posts.length > 0
+    ? Math.round(
+        (posts.reduce((s, p) => s + p.engagement_rate, 0) / posts.length) * 100
+      ) / 100
+    : 0
 
   await supabase
     .from("tracked_accounts")
@@ -181,8 +184,8 @@ async function syncInstagram(
       display_name:    info.full_name || info.username,
       avatar_url:      info.avatar_url,
       follower_count:  info.follower_count,
-      total_views:     totalViews,
-      avg_views:       avgViews,
+      total_views:     null,   // Instagram does not provide view counts
+      avg_views:       null,   // Instagram does not provide view counts
       engagement_rate: engRate,
       last_synced_at:  new Date().toISOString(),
     })
@@ -190,9 +193,8 @@ async function syncInstagram(
 
   for (const post of posts) {
     const videoUrl = `https://www.instagram.com/p/${post.id}/`
-    const base     = post.views || info.follower_count || 1
-    const engagementRate = ((post.likes + post.comments) / base) * 100
-    const viralityScore  = Math.min(10, Math.round((post.views / 50_000) * 10) / 10)
+    // Virality score based on engagement rather than views for Instagram
+    const viralityScore = Math.min(10, Math.round(post.engagement_rate * 0.8 * 10) / 10)
 
     const { data: upserted } = await supabase
       .from("tracked_videos")
@@ -203,12 +205,12 @@ async function syncInstagram(
           video_url:       videoUrl,
           thumbnail_url:   post.thumbnail,
           caption:         post.caption,
-          views:           post.views,
+          views:           null,           // not available from Instagram
           likes:           post.likes,
           comments:        post.comments,
           shares:          0,
           saves:           0,
-          engagement_rate: Math.round(engagementRate * 100) / 100,
+          engagement_rate: post.engagement_rate,
           virality_score:  viralityScore,
           posted_at:       post.created_at,
         },
@@ -219,7 +221,7 @@ async function syncInstagram(
 
     if (upserted?.id) {
       await insertDailySnapshot(supabase, upserted.id, {
-        views:    post.views,
+        views:    0,   // stored as 0 in snapshots since column is not nullable
         likes:    post.likes,
         comments: post.comments,
         shares:   0,
