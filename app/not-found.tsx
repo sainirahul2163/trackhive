@@ -1,12 +1,17 @@
-"use client"
-
+import type { Metadata } from "next"
 import Link from "next/link"
-import { Zap, ArrowLeft, LayoutDashboard, BarChart3, Megaphone } from "lucide-react"
+import { Zap, LayoutDashboard, BarChart3, Megaphone } from "lucide-react"
+import { BackButton } from "@/components/ui/back-button"
+
+export const metadata: Metadata = {
+  title: "404 — Page Not Found",
+  robots: { index: false, follow: false },
+}
 
 const QUICK_LINKS = [
-  { href: "/dashboard",  label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/analytics",  label: "Analytics",  icon: BarChart3 },
-  { href: "/campaigns",  label: "Campaigns",  icon: Megaphone },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/analytics", label: "Analytics",  icon: BarChart3       },
+  { href: "/campaigns", label: "Campaigns",  icon: Megaphone       },
 ]
 
 export default function NotFound() {
@@ -71,26 +76,12 @@ export default function NotFound() {
             padding: "10px 20px", borderRadius: "10px",
             backgroundColor: "#7C3AED", color: "white",
             fontSize: "14px", fontWeight: 600, textDecoration: "none",
-            transition: "background-color 150ms",
           }}
         >
           <LayoutDashboard style={{ width: "16px", height: "16px" }} />
           Go to Dashboard
         </Link>
-        <button
-          onClick={() => window.history.back()}
-          style={{
-            display: "flex", alignItems: "center", gap: "8px",
-            padding: "10px 20px", borderRadius: "10px",
-            backgroundColor: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            color: "#a1a1aa", fontSize: "14px", fontWeight: 500,
-            cursor: "pointer", transition: "background-color 150ms",
-          }}
-        >
-          <ArrowLeft style={{ width: "16px", height: "16px" }} />
-          Go back
-        </button>
+        <BackButton />
       </div>
 
       {/* Quick links */}
@@ -109,7 +100,6 @@ export default function NotFound() {
                 backgroundColor: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.07)",
                 color: "#71717a", fontSize: "13px", textDecoration: "none",
-                transition: "all 150ms",
               }}
             >
               <Icon style={{ width: "13px", height: "13px" }} />

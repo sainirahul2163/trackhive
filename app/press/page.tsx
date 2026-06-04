@@ -5,6 +5,16 @@ import { Zap, ArrowLeft, Download, ExternalLink, Mail, FileText, Image as ImageI
 export const metadata: Metadata = {
   title: "Press & Media",
   description: "TrackHive press kit, brand assets, media coverage, and press contact information.",
+  openGraph: {
+    title:       "TrackHive Press Kit",
+    description: "Brand assets and media resources.",
+    images: [{ url: "/og?title=TrackHive+Press+Kit&description=Brand+assets+and+media+resources", width: 1200, height: 630 }],
+  },
+  twitter: {
+    title:       "TrackHive Press Kit",
+    description: "Brand assets and media resources.",
+    images:      ["/og?title=TrackHive+Press+Kit&description=Brand+assets+and+media+resources"],
+  },
   alternates: { canonical: "https://trackhive.io/press" },
 }
 

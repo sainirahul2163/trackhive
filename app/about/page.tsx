@@ -5,6 +5,16 @@ import { Zap, ArrowLeft, Target, Heart, Rocket, Globe, ArrowRight } from "lucide
 export const metadata: Metadata = {
   title: "About TrackHive",
   description: "We're building the operating system for UGC marketing. Learn about our mission, team, and story.",
+  openGraph: {
+    title:       "About TrackHive",
+    description: "Building the OS for UGC marketing.",
+    images: [{ url: "/og?title=About+TrackHive&description=Building+the+OS+for+UGC+marketing", width: 1200, height: 630 }],
+  },
+  twitter: {
+    title:       "About TrackHive",
+    description: "Building the OS for UGC marketing.",
+    images:      ["/og?title=About+TrackHive&description=Building+the+OS+for+UGC+marketing"],
+  },
   alternates: { canonical: "https://trackhive.io/about" },
 }
 

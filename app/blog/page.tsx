@@ -5,6 +5,16 @@ import { Zap, ArrowLeft, Mail, BookOpen, Rss } from "lucide-react"
 export const metadata: Metadata = {
   title: "Blog — UGC Marketing Insights",
   description: "Strategies, case studies, and tips for scaling UGC campaigns.",
+  openGraph: {
+    title:       "TrackHive Blog",
+    description: "UGC marketing strategies and insights.",
+    images: [{ url: "/og?title=TrackHive+Blog&description=UGC+marketing+strategies+and+insights", width: 1200, height: 630 }],
+  },
+  twitter: {
+    title:       "TrackHive Blog",
+    description: "UGC marketing strategies and insights.",
+    images:      ["/og?title=TrackHive+Blog&description=UGC+marketing+strategies+and+insights"],
+  },
   alternates: { canonical: "https://trackhive.io/blog" },
 }
 
