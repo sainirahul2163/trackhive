@@ -228,7 +228,7 @@ export function Pricing() {
           transition={{ delay: 0.35, duration: 0.5 }}
           style={{ textAlign: "center", fontSize: "13px", color: "#52525b", marginTop: "32px" }}
         >
-          14-day free trial on all plans. No credit card required.
+          7-day free trial on all plans. No credit card required.
         </motion.p>
       </div>
     </section>

@@ -92,7 +92,7 @@ function CTABanner() {
           <div style={{ position: "relative", zIndex: 1 }}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 14px", borderRadius: "100px", backgroundColor: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", marginBottom: "20px" }}>
               <Zap style={{ width: "12px", height: "12px", color: "#fde68a", fill: "#fde68a" }} />
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "#fde68a" }}>14-day free trial · No card required</span>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#fde68a" }}>7-day free trial · No card required</span>
             </div>
 
             <h2 style={{ fontSize: "clamp(28px, 4.5vw, 52px)", fontWeight: 800, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.1, marginBottom: "16px" }}>

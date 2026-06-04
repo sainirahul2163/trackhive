@@ -194,7 +194,7 @@ export function SignupGateModal({ open, onClose, feature = "this feature" }: Sig
 
           {/* Trust line */}
           <p style={{ textAlign: "center", fontSize: "11px", color: "#52525b", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
-            <Shield style={{ width: "11px", height: "11px" }} /> 14-day free trial · No credit card · Cancel anytime
+            <Shield style={{ width: "11px", height: "11px" }} /> 7-day free trial · No credit card · Cancel anytime
           </p>
         </div>
       </div>

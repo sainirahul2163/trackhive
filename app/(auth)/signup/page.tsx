@@ -82,7 +82,7 @@ export default function SignupPage() {
         <div style={{ borderRadius: "16px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#111111", padding: "32px" }}>
           <div className="text-center mb-6">
             <h1 className="text-[22px] font-semibold text-white mb-1.5">Create your account</h1>
-            <p className="text-sm text-zinc-500">Start your 14-day free trial. No credit card required.</p>
+            <p className="text-sm text-zinc-500">Start your 7-day free trial. No credit card required.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

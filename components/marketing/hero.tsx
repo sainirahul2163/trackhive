@@ -222,7 +222,7 @@ export function Hero() {
           custom={4} variants={FADE_UP} initial="hidden" animate="show"
           style={{ textAlign: "center", fontSize: "13px", color: "#52525b", marginBottom: "48px" }}
         >
-          14-day free trial · No credit card required · Cancel anytime
+          7-day free trial · No credit card required · Cancel anytime
         </motion.p>
 
         {/* Platform icons */}

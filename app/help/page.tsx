@@ -60,7 +60,7 @@ const FAQS = [
   },
   {
     q: "What's the difference between the plans?",
-    a: "Starter ($49/mo) covers 1,000 videos and 10 creators. Pro ($149/mo) covers 5,000 videos, 100 creators, and unlocks API access. Agency ($299/mo) covers 20,000 videos, 500 creators, and includes white-labelling. All plans include a 14-day free trial.",
+    a: "Starter ($49/mo) covers 1,000 videos and 10 creators. Pro ($149/mo) covers 5,000 videos, 100 creators, and unlocks API access. Agency ($299/mo) covers 20,000 videos, 500 creators, and includes white-labelling. All plans include a 7-day free trial.",
   },
   {
     q: "Can I cancel anytime?",

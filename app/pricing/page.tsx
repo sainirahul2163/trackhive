@@ -90,7 +90,7 @@ const COMPARE = [
 ]
 
 const FAQS = [
-  { q: "Is there a free trial?",       a: "Yes — every plan includes a 14-day free trial. No credit card required." },
+  { q: "Is there a free trial?",       a: "Yes — every plan includes a 7-day free trial. No credit card required." },
   { q: "Can I switch plans later?",    a: "Absolutely. You can upgrade or downgrade at any time from Settings → Billing." },
   { q: "What payment methods do you accept?", a: "We accept all major credit cards via Stripe. Annual plans can also be paid by bank transfer on request." },
   { q: "Are there setup fees?",        a: "No. There are no setup fees, onboarding fees, or hidden charges." },
@@ -155,7 +155,7 @@ export default function PricingPage() {
       {/* Hero */}
       <section style={{ textAlign: "center", padding: "64px 24px 48px" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 12px", borderRadius: "100px", border: "1px solid rgba(124,58,237,0.3)", backgroundColor: "rgba(124,58,237,0.08)", marginBottom: "20px" }}>
-          <span style={{ fontSize: "12px", color: "#a78bfa", fontWeight: 600 }}>14-day free trial · No credit card required</span>
+          <span style={{ fontSize: "12px", color: "#a78bfa", fontWeight: 600 }}>7-day free trial · No credit card required</span>
         </div>
         <h1 style={{ fontSize: "clamp(32px,5vw,52px)", fontWeight: 800, color: "#fafafa", lineHeight: 1.15, marginBottom: "16px" }}>
           Simple, transparent pricing
@@ -244,7 +244,7 @@ export default function PricingPage() {
         </div>
 
         <p style={{ textAlign: "center", fontSize: "13px", color: "#52525b", marginTop: "24px" }}>
-          All plans include a 14-day free trial. No credit card required. Cancel anytime.
+          All plans include a 7-day free trial. No credit card required. Cancel anytime.
         </p>
       </section>
 
@@ -304,7 +304,7 @@ export default function PricingPage() {
               Try the demo
             </Link>
           </div>
-          <p style={{ fontSize: "12px", color: "#52525b", marginTop: "16px" }}>14-day free trial · No credit card · Cancel anytime</p>
+          <p style={{ fontSize: "12px", color: "#52525b", marginTop: "16px" }}>7-day free trial · No credit card · Cancel anytime</p>
         </div>
       </section>
 

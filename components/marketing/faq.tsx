@@ -23,7 +23,7 @@ const FAQS = [
   },
   {
     q: "Is there a free trial?",
-    a: "Yes — every plan comes with a 14-day free trial, no credit card required. You get full access to all features in your chosen plan. After 14 days you can subscribe or downgrade to keep your data. We don't delete anything if you don't convert.",
+    a: "Yes — every plan comes with a 7-day free trial, no credit card required. You get full access to all features in your chosen plan. After 7 days you can subscribe or downgrade to keep your data. We don't delete anything if you don't convert.",
   },
   {
     q: "Can agencies white-label the platform?",
