@@ -14,6 +14,7 @@ import {
   CreditCard,
   TrendingUp,
   Swords,
+  Users2,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -28,6 +29,7 @@ const navItems = [
   { href: "/payments",    label: "Payments",    icon: CreditCard      },
   { href: "/trends",      label: "Trends",      icon: TrendingUp      },
   { href: "/competitors", label: "Competitors", icon: Swords          },
+  { href: "/discovery",   label: "Discovery",   icon: Users2          },
 ]
 
 const bottomItems = [

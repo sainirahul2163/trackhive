@@ -4,7 +4,49 @@ import { useState, useMemo } from "react"
 import {
   X, DollarSign, Calendar, CheckCircle2, Clock, AlertCircle,
   ChevronDown, FileText, Video, Link, Info, TrendingUp,
+  Bell, ThumbsUp, ThumbsDown, MessageSquare,
 } from "lucide-react"
+
+// ── Invite types ───────────────────────────────────────────────
+interface CampaignInvite {
+  id: string
+  brand: string
+  brandInitials: string
+  brandColor: string
+  campaignName: string
+  niche: string
+  budget: number
+  deadline: string
+  message: string
+  sentAt: string
+}
+
+const MOCK_INVITES: CampaignInvite[] = [
+  {
+    id: "inv1",
+    brand: "LumaGlow",
+    brandInitials: "LG",
+    brandColor: "#fbbf24",
+    campaignName: "Glow Routine Challenge",
+    niche: "Beauty",
+    budget: 900,
+    deadline: "2025-08-01",
+    message: "Hi! We love your authentic content and think you'd be perfect for our 7-day glow challenge. We're offering $300/video with a bonus for high-performing posts. Would love to work with you!",
+    sentAt: "2025-06-28",
+  },
+  {
+    id: "inv2",
+    brand: "CoreShift",
+    brandInitials: "CS",
+    brandColor: "#34d399",
+    campaignName: "Summer Strength Series",
+    niche: "Fitness",
+    budget: 600,
+    deadline: "2025-07-30",
+    message: "Hey! CoreShift is launching a new pre-workout line and we want creators who keep it real. 2 videos, your style, $300 each. Let us know if you're in!",
+    sentAt: "2025-06-27",
+  },
+]
 
 // ── Types ──────────────────────────────────────────────────────
 type CampaignStatus = "active" | "pending" | "completed" | "paused"
@@ -329,9 +371,55 @@ function BriefModal({ campaign, onClose }: BriefModalProps) {
   )
 }
 
+interface DeclineModalProps { invite: CampaignInvite; onConfirm: (reason: string) => void; onCancel: () => void }
+function DeclineModal({ invite, onConfirm, onCancel }: DeclineModalProps) {
+  const [reason, setReason] = useState("")
+  const REASONS = ["Schedule conflict", "Not the right niche fit", "Budget too low", "Already at capacity", "Other"]
+  return (
+    <>
+      <div onClick={onCancel} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 40 }} />
+      <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", zIndex: 50 }}>
+        <div style={{ width: "100%", maxWidth: "420px", backgroundColor: "#111111", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.09)", padding: "22px" }}>
+          <p style={{ fontSize: "15px", fontWeight: 800, color: "#fafafa", marginBottom: "4px" }}>Decline Invite</p>
+          <p style={{ fontSize: "12px", color: "#71717a", marginBottom: "16px" }}>Let {invite.brand} know why (optional but appreciated)</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "14px" }}>
+            {REASONS.map(r => (
+              <button key={r} onClick={() => setReason(r)}
+                style={{ padding: "9px 12px", borderRadius: "8px", border: reason === r ? "1px solid rgba(248,113,113,0.3)" : "1px solid rgba(255,255,255,0.07)", backgroundColor: reason === r ? "rgba(248,113,113,0.06)" : "transparent", color: reason === r ? "#f87171" : "#a1a1aa", fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
+                {r}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button onClick={onCancel} style={{ flex: 1, padding: "9px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.09)", backgroundColor: "transparent", color: "#a1a1aa", fontSize: "13px", cursor: "pointer" }}>Cancel</button>
+            <button onClick={() => onConfirm(reason)} style={{ flex: 1, padding: "9px", borderRadius: "8px", backgroundColor: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>Decline</button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export default function CreatorCampaignsPage() {
   const [filter, setFilter] = useState<CampaignStatus | "all">("all")
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
+  const [invites, setInvites] = useState<CampaignInvite[]>(MOCK_INVITES)
+  const [expandedInvite, setExpandedInvite] = useState<string | null>(null)
+  const [decliningInvite, setDecliningInvite] = useState<CampaignInvite | null>(null)
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set())
+
+  function acceptInvite(invite: CampaignInvite) {
+    setAcceptedIds(prev => new Set([...Array.from(prev), invite.id]))
+    setTimeout(() => {
+      setInvites(prev => prev.filter(i => i.id !== invite.id))
+      setAcceptedIds(prev => { const s = new Set(Array.from(prev)); s.delete(invite.id); return s })
+    }, 1200)
+  }
+
+  function declineInvite(invite: CampaignInvite) {
+    setInvites(prev => prev.filter(i => i.id !== invite.id))
+    setDecliningInvite(null)
+  }
 
   const filtered = useMemo(
     () => filter === "all" ? MOCK_CAMPAIGNS : MOCK_CAMPAIGNS.filter(c => c.status === filter),
@@ -353,10 +441,93 @@ export default function CreatorCampaignsPage() {
   return (
     <div style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#fafafa" }}>My Campaigns</h1>
-        <p style={{ fontSize: "13px", color: "#71717a", marginTop: "3px" }}>View briefs, track progress, and manage deliverables</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+        <div>
+          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#fafafa" }}>My Campaigns</h1>
+          <p style={{ fontSize: "13px", color: "#71717a", marginTop: "3px" }}>View briefs, track progress, and manage deliverables</p>
+        </div>
+        {invites.length > 0 && (
+          <span style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "8px", backgroundColor: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.15)", fontSize: "12px", fontWeight: 700, color: "#fbbf24" }}>
+            <Bell style={{ width: "12px", height: "12px" }} />
+            {invites.length} new invite{invites.length > 1 ? "s" : ""}
+          </span>
+        )}
       </div>
+
+      {/* ── Pending Invites ───────────────────────────────────────── */}
+      {invites.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+            <Bell style={{ width: "13px", height: "13px", color: "#fbbf24" }} />
+            <p style={{ fontSize: "12px", fontWeight: 700, color: "#fbbf24", textTransform: "uppercase", letterSpacing: "0.07em" }}>New Invites</p>
+            <span style={{ padding: "1px 7px", borderRadius: "99px", backgroundColor: "rgba(251,191,36,0.1)", fontSize: "10px", fontWeight: 700, color: "#fbbf24" }}>{invites.length}</span>
+          </div>
+
+          {invites.map(inv => {
+            const accepted = acceptedIds.has(inv.id)
+            const expanded = expandedInvite === inv.id
+            return (
+              <div key={inv.id}
+                style={{ borderRadius: "14px", border: accepted ? "1px solid rgba(52,211,153,0.25)" : "1px solid rgba(251,191,36,0.2)", backgroundColor: accepted ? "rgba(52,211,153,0.03)" : "rgba(251,191,36,0.03)", overflow: "hidden", transition: "all 300ms" }}>
+                {/* Invite header */}
+                <div style={{ padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                  <div style={{ width: "40px", height: "40px", borderRadius: "11px", backgroundColor: `${inv.brandColor}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 800, color: inv.brandColor, flexShrink: 0 }}>
+                    {inv.brandInitials}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "7px", flexWrap: "wrap" }}>
+                      <p style={{ fontSize: "14px", fontWeight: 700, color: "#fafafa" }}>{inv.campaignName}</p>
+                      <span style={{ padding: "2px 7px", borderRadius: "5px", backgroundColor: "rgba(251,191,36,0.08)", fontSize: "10px", fontWeight: 700, color: "#fbbf24" }}>New Invite</span>
+                    </div>
+                    <p style={{ fontSize: "12px", color: "#71717a", marginTop: "2px" }}>
+                      {inv.brand} · {inv.niche} · ${inv.budget} budget · Due {new Date(inv.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </p>
+                  </div>
+                  <button onClick={() => setExpandedInvite(expanded ? null : inv.id)}
+                    style={{ padding: "5px", borderRadius: "7px", border: "none", backgroundColor: "rgba(255,255,255,0.05)", cursor: "pointer", flexShrink: 0 }}>
+                    <MessageSquare style={{ width: "13px", height: "13px", color: "#71717a" }} />
+                  </button>
+                </div>
+
+                {/* Expanded message */}
+                {expanded && (
+                  <div style={{ padding: "0 16px 14px", borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: "12px", marginTop: "0" }}>
+                    <p style={{ fontSize: "12px", color: "#a1a1aa", lineHeight: 1.7 }}>
+                      &ldquo;{inv.message}&rdquo;
+                    </p>
+                    <p style={{ fontSize: "10px", color: "#3f3f46", marginTop: "6px" }}>
+                      Sent {new Date(inv.sentAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                    </p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div style={{ padding: "10px 16px 14px", display: "flex", gap: "7px" }}>
+                  {accepted ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 700, color: "#34d399" }}>
+                      <CheckCircle2 style={{ width: "15px", height: "15px" }} />
+                      Invite accepted — added to active campaigns
+                    </div>
+                  ) : (
+                    <>
+                      <button onClick={() => setDecliningInvite(inv)}
+                        style={{ display: "flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "8px", border: "1px solid rgba(248,113,113,0.2)", backgroundColor: "rgba(248,113,113,0.05)", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+                        <ThumbsDown style={{ width: "12px", height: "12px" }} />
+                        Decline
+                      </button>
+                      <button onClick={() => acceptInvite(inv)}
+                        style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", backgroundColor: "#7C3AED", color: "white", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer" }}>
+                        <ThumbsUp style={{ width: "12px", height: "12px" }} />
+                        Accept &amp; View Brief
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Summary row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: "10px" }}>
@@ -454,6 +625,14 @@ export default function CreatorCampaignsPage() {
       )}
 
       {selectedCampaign && <BriefModal campaign={selectedCampaign} onClose={() => setSelectedCampaign(null)} />}
+
+      {decliningInvite && (
+        <DeclineModal
+          invite={decliningInvite}
+          onConfirm={() => declineInvite(decliningInvite)}
+          onCancel={() => setDecliningInvite(null)}
+        />
+      )}
     </div>
   )
 }
