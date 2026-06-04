@@ -1,4 +1,21 @@
+import type { Metadata } from "next"
 import { Navbar } from "@/components/marketing/navbar"
+
+export const metadata: Metadata = {
+  title: "TrackHive — UGC Analytics & Campaign Management",
+  description: "Track every creator. Manage campaigns. Pay results. Zero spreadsheets.",
+  openGraph: {
+    title:       "TrackHive — UGC Analytics & Campaign Management",
+    description: "Track every creator. Manage campaigns. Pay results. Zero spreadsheets.",
+    images: [{ url: "/og?title=TrackHive+%E2%80%94+UGC+Analytics&description=Track+every+creator.+Pay+results.", width: 1200, height: 630 }],
+  },
+  twitter: {
+    title:       "TrackHive — UGC Analytics & Campaign Management",
+    description: "Track every creator. Manage campaigns. Pay results.",
+    images:      ["/og?title=TrackHive+%E2%80%94+UGC+Analytics&description=Track+every+creator.+Pay+results."],
+  },
+  alternates: { canonical: "https://trackhive.io" },
+}
 import { Hero } from "@/components/marketing/hero"
 import { SocialProof } from "@/components/marketing/social-proof"
 import { Features } from "@/components/marketing/features"

@@ -1,5 +1,12 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Zap, ArrowLeft, Mail, BookOpen, Rss } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Blog — UGC Marketing Insights",
+  description: "Strategies, case studies, and tips for scaling UGC campaigns.",
+  alternates: { canonical: "https://trackhive.io/blog" },
+}
 
 const UPCOMING = [
   { tag: "Product", title: "How TrackHive tracks any creator without API access", eta: "Coming soon" },

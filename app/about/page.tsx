@@ -1,5 +1,12 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Zap, ArrowLeft, Target, Heart, Rocket, Globe, ArrowRight } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "About TrackHive",
+  description: "We're building the operating system for UGC marketing. Learn about our mission, team, and story.",
+  alternates: { canonical: "https://trackhive.io/about" },
+}
 
 const TEAM = [
   { name: "Rahul Saini",    role: "CEO & Co-Founder",     avatar: "RS", color: "#7C3AED", bio: "Ex-growth lead at a top DTC agency. Built TrackHive after spending 3 years tracking creators in spreadsheets." },
