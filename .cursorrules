@@ -210,3 +210,53 @@ lib/
   competitors-data.ts — Supabase data layer per module
 middleware.ts      — protects all dashboard routes, reads session from cookies
 ```
+
+---
+
+## EnsembleData API Error Handling
+
+Base URL: https://ensembledata.com/apis
+Docs:     https://ensembledata.com/apis/docs
+Token:    always use `process.env.ENSEMBLEDATA_API_TOKEN` — **server-side only, never client**
+
+### Error codes — handle ALL of these explicitly
+
+| Code | Meaning | User-facing message |
+|------|---------|---------------------|
+| 491 | Token not found | "API configuration error, contact support" |
+| 492 | Email not verified | "API account not verified" |
+| 493 | Subscription expired | "API subscription expired, upgrade plan" |
+| 495 | Daily units exhausted | "Daily API limit reached, try again tomorrow" |
+| 422 | Validation error | "Invalid username or URL" |
+| 500 | Server error | "Platform temporarily unavailable, try again" |
+
+Special handling:
+- **495**: stop all sync jobs immediately — do not retry
+- **493**: `console.error("[EnsembleData] Subscription expired — admin action required")`
+
+### Key endpoints for TrackHive
+
+**TikTok:**
+- `GET /tt/user/info?username={username}&token=`
+- `GET /tt/user/posts?username={username}&depth=1&token=`
+- `GET /tt/post/info?aweme_id={videoId}&token=`
+
+**Instagram:**
+- `GET /instagram/user/detailed-info?username={username}&token=`
+- `GET /instagram/user/reels?username={username}&token=`
+- `GET /instagram/user/posts?username={username}&token=`
+
+**YouTube:**
+- `GET /youtube/channel/get-id?username={handle}&token=` — convert handle → channel ID first
+- `GET /youtube/channel/detailed-info?channel_id={id}&token=`
+- `GET /youtube/channel/shorts?channel_id={id}&token=`
+- `GET /youtube/channel/videos?channel_id={id}&token=`
+
+### Rules
+
+1. Always handle all 6 error codes explicitly in every API function.
+2. Never import `lib/ensembledata.ts` in client components — server-side only.
+3. Cache all responses for a minimum of 1 hour (in-process Map or Supabase).
+4. On **495**: set a flag to abort the current sync loop and return early.
+5. On **493**: `console.error` immediately so the admin sees it in Vercel logs.
+6. Use `EnsembleDataError(status, message)` (defined in `lib/ensembledata.ts`) for all throws.
