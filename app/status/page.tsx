@@ -1,5 +1,12 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Zap, ArrowLeft, CheckCircle2, AlertTriangle, XCircle } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "System Status",
+  description: "Live status of TrackHive services — uptime, incidents, and scheduled maintenance.",
+  alternates: { canonical: "https://trackhive.io/status" },
+}
 
 type Status = "operational" | "degraded" | "outage"
 

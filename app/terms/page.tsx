@@ -1,5 +1,13 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Zap, ArrowLeft } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "Read the TrackHive Terms of Service. Last updated 2025.",
+  robots: { index: false, follow: true },
+  alternates: { canonical: "https://trackhive.io/terms" },
+}
 
 const LAST_UPDATED = "June 1, 2025"
 

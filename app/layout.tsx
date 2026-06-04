@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { JsonLd } from "@/components/seo/json-ld"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -59,8 +60,11 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon:     "/favicon.ico",
-    shortcut: "/favicon.ico",
+    icon:     [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.svg",
+    apple:    "/favicon.svg",
   },
   alternates: {
     canonical: "https://trackhive.io",
@@ -72,9 +76,44 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "TrackHive",
+    url: "https://trackhive.io",
+    logo: "https://trackhive.io/og?title=TrackHive&description=UGC+Analytics+Platform",
+    sameAs: [
+      "https://twitter.com/trackhive",
+      "https://linkedin.com/company/trackhive",
+    ],
+    contactPoint: {
+      "@type": "ContactPoint",
+      email: "support@trackhive.io",
+      contactType: "customer support",
+    },
+  }
+
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "TrackHive",
+    url: "https://trackhive.io",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: "https://trackhive.io/docs?q={search_term_string}",
+      },
+      "query-input": "required name=search_term_string",
+    },
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} antialiased`} suppressHydrationWarning>{children}</body>
+      <body className={`${inter.className} antialiased`} suppressHydrationWarning>
+        <JsonLd data={[organizationSchema, websiteSchema]} />
+        {children}
+      </body>
     </html>
   )
 }

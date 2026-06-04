@@ -1,5 +1,12 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Zap, ArrowLeft, Download, ExternalLink, Mail, FileText, Image as ImageIcon, Palette } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Press & Media",
+  description: "TrackHive press kit, brand assets, media coverage, and press contact information.",
+  alternates: { canonical: "https://trackhive.io/press" },
+}
 
 const COVERAGE = [
   { outlet: "TechCrunch", title: "TrackHive raises $1.2M to bring enterprise-grade UGC analytics to mid-market brands", date: "May 2025", url: "#", logo: "TC" },

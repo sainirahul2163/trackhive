@@ -1,7 +1,14 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import {
   Zap, Sparkles, Wrench, AlertTriangle, ArrowLeft,
 } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Changelog",
+  description: "New features, improvements, and bug fixes shipped to TrackHive — updated regularly.",
+  alternates: { canonical: "https://trackhive.io/changelog" },
+}
 
 type EntryType = "feature" | "improvement" | "fix" | "breaking"
 

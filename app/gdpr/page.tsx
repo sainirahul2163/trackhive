@@ -1,5 +1,13 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Zap, ArrowLeft, ShieldCheck, Mail } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "GDPR Compliance",
+  description: "TrackHive's GDPR compliance statement — your rights, data processing, and how to make a request.",
+  robots: { index: false, follow: true },
+  alternates: { canonical: "https://trackhive.io/gdpr" },
+}
 
 const LAST_UPDATED = "June 1, 2025"
 

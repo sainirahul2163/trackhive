@@ -1,5 +1,13 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Zap, ArrowLeft, Cookie } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Cookie Policy",
+  description: "TrackHive's cookie policy — what cookies we use and how to manage them.",
+  robots: { index: false, follow: true },
+  alternates: { canonical: "https://trackhive.io/cookies" },
+}
 
 const LAST_UPDATED = "June 1, 2025"
 
