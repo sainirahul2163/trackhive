@@ -1,411 +1,411 @@
 "use client"
 
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { CmdKSearch } from "@/components/ui/cmd-search"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
-  Eye,
-  Megaphone,
-  DollarSign,
-  AlertTriangle,
-  ArrowUpRight,
-  ArrowDownRight,
-  TrendingUp,
-  Play,
-  MoreHorizontal,
+  Eye, Megaphone, DollarSign, AlertTriangle,
+  TrendingUp, Play, Plus, RefreshCw,
+  Users, ArrowUpRight,
 } from "lucide-react"
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
 } from "recharts"
+import { createBrowserClient } from "@supabase/ssr"
+import { useUser } from "@/lib/use-user"
 
-const metrics = [
-  {
-    title: "Total Views",
-    value: "24.8M",
-    change: "+18.2%",
-    changeType: "positive" as const,
-    icon: Eye,
-    color: "text-blue-400",
-    bg: "bg-blue-500/10",
-    description: "vs last month",
-  },
-  {
-    title: "Active Campaigns",
-    value: "12",
-    change: "+3",
-    changeType: "positive" as const,
-    icon: Megaphone,
-    color: "text-purple-400",
-    bg: "bg-purple-500/10",
-    description: "this month",
-  },
-  {
-    title: "Pending Payouts",
-    value: "$48,230",
-    change: "-$2,100",
-    changeType: "negative" as const,
-    icon: DollarSign,
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/10",
-    description: "vs last week",
-  },
-  {
-    title: "Creator Alerts",
-    value: "7",
-    change: "+4",
-    changeType: "negative" as const,
-    icon: AlertTriangle,
-    color: "text-amber-400",
-    bg: "bg-amber-500/10",
-    description: "need attention",
-  },
-]
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const generateChartData = () => {
-  const data = []
-  const now = new Date()
-  for (let i = 29; i >= 0; i--) {
-    const date = new Date(now)
-    date.setDate(date.getDate() - i)
-    data.push({
-      date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      views: Math.floor(Math.random() * 900000 + 400000),
-      revenue: Math.floor(Math.random() * 8000 + 2000),
-    })
-  }
-  return data
+interface DashboardMetrics {
+  totalViews:      number
+  activeCampaigns: number
+  pendingPayouts:  number
+  creatorAlerts:   number   // accounts not synced in > 7 days
 }
 
-const chartData = generateChartData()
-
-const topVideos = [
-  {
-    id: "1",
-    title: "I tried every protein powder for 30 days",
-    creator: "@jake_fitness",
-    views: "4.2M",
-    revenue: "$12,400",
-    status: "active",
-    campaign: "ProteinPro Summer",
-  },
-  {
-    id: "2",
-    title: "My honest review of this $200 gadget",
-    creator: "@techreviewer",
-    views: "2.8M",
-    revenue: "$8,900",
-    status: "active",
-    campaign: "GadgetHive Q2",
-  },
-  {
-    id: "3",
-    title: "Day in my life as a NYC freelancer",
-    creator: "@freelife_nyc",
-    views: "1.9M",
-    revenue: "$5,200",
-    status: "paused",
-    campaign: "Creator Life Series",
-  },
-  {
-    id: "4",
-    title: "How I make $10K/month with this app",
-    creator: "@moneymoves22",
-    views: "1.6M",
-    revenue: "$4,100",
-    status: "active",
-    campaign: "FinanceApp Pro",
-  },
-  {
-    id: "5",
-    title: "The skincare routine that changed my life",
-    creator: "@glowup_daily",
-    views: "1.1M",
-    revenue: "$3,800",
-    status: "completed",
-    campaign: "Glow Summer",
-  },
-]
-
-const recentAlerts = [
-  {
-    id: "1",
-    type: "warning",
-    message: "@jake_fitness missed posting deadline by 2 days",
-    time: "15 min ago",
-  },
-  {
-    id: "2",
-    type: "info",
-    message: "Campaign \"GadgetHive Q2\" is 80% through budget",
-    time: "1 hour ago",
-  },
-  {
-    id: "3",
-    type: "success",
-    message: "@glowup_daily completed all deliverables",
-    time: "3 hours ago",
-  },
-  {
-    id: "4",
-    type: "error",
-    message: "Payment to @moneymoves22 failed — card declined",
-    time: "5 hours ago",
-  },
-  {
-    id: "5",
-    type: "warning",
-    message: "Competitor \"BrandX\" launched 3 new campaigns",
-    time: "Yesterday",
-  },
-]
-
-const alertDots: Record<string, string> = {
-  warning: "bg-amber-400",
-  info: "bg-blue-400",
-  success: "bg-emerald-400",
-  error: "bg-red-400",
+interface TopVideo {
+  id:       string
+  caption:  string
+  creator:  string
+  views:    number
+  platform: string
 }
 
-const statusColors = {
-  active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  paused: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  completed: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+interface DailyPoint {
+  date:  string
+  views: number
 }
 
-interface TooltipProps {
-  active?: boolean
-  payload?: Array<{ value: number }>
-  label?: string
+// ─── Tooltip ──────────────────────────────────────────────────────────────────
+
+interface TooltipProps { active?: boolean; payload?: Array<{ value: number }>; label?: string }
+function ChartTooltip({ active, payload, label }: TooltipProps) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-[#1a1a1a] border border-white/10 rounded-lg px-4 py-3 shadow-xl">
+      <p className="text-xs text-zinc-500 mb-2">{label}</p>
+      <p className="text-sm font-semibold text-purple-400">{Number(payload[0]?.value).toLocaleString()} views</p>
+    </div>
+  )
 }
 
-const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-[#1a1a1a] border border-white/10 rounded-lg px-4 py-3 shadow-xl">
-        <p className="text-xs text-zinc-500 mb-2">{label}</p>
-        <p className="text-sm font-semibold text-purple-400">
-          {Number(payload[0]?.value).toLocaleString()} views
-        </p>
+// ─── Empty card ───────────────────────────────────────────────────────────────
+
+function EmptyCard({ icon: Icon, title, desc, href, cta }: {
+  icon: React.ElementType; title: string; desc: string; href: string; cta: string
+}) {
+  return (
+    <div className="rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] p-8 flex flex-col items-center text-center gap-3">
+      <div className="w-12 h-12 rounded-xl bg-purple-600/10 border border-purple-500/20 flex items-center justify-center">
+        <Icon className="w-5 h-5 text-purple-400" />
       </div>
-    )
-  }
-  return null
+      <div>
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <p className="text-xs text-zinc-500 mt-0.5 max-w-xs">{desc}</p>
+      </div>
+      <Link href={href} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-all">
+        <Plus className="w-3.5 h-3.5" /> {cta}
+      </Link>
+    </div>
+  )
 }
+
+// ─── Metric skeleton ──────────────────────────────────────────────────────────
+
+function MetricSkeleton() {
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
+      <div className="flex items-center justify-between mb-4">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="w-8 h-8 rounded-lg" />
+      </div>
+      <Skeleton className="h-7 w-16 mb-2" />
+      <Skeleton className="h-3 w-28" />
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { user } = useUser()
+  const [metrics,    setMetrics]    = useState<DashboardMetrics | null>(null)
+  const [topVideos,  setTopVideos]  = useState<TopVideo[]>([])
+  const [chartData,  setChartData]  = useState<DailyPoint[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const load = useCallback(async (userId: string) => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    )
+
+    const [accountsRes, campaignsRes, payoutsRes, videosRes, dailyRes] = await Promise.allSettled([
+      // Tracked accounts for this workspace
+      supabase
+        .from("tracked_accounts")
+        .select("id, total_views, last_synced_at")
+        .or(`workspace_id.eq.${userId},workspace_id.is.null`),
+
+      // Active campaigns
+      supabase
+        .from("campaigns")
+        .select("id, status")
+        .or(`workspace_id.eq.${userId},workspace_id.is.null`)
+        .eq("status", "active"),
+
+      // Pending payouts
+      supabase
+        .from("payouts")
+        .select("amount")
+        .or(`workspace_id.eq.${userId},workspace_id.is.null`)
+        .in("status", ["pending", "approved"]),
+
+      // Top videos
+      supabase
+        .from("tracked_videos")
+        .select("id, caption, views, platform, tracked_accounts(username, workspace_id)")
+        .order("views", { ascending: false })
+        .limit(5),
+
+      // Daily views (last 30 days across all accounts)
+      supabase
+        .from("video_daily_stats")
+        .select("date, views")
+        .gte("date", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
+        .order("date", { ascending: true }),
+    ])
+
+    // ── Metrics ──
+    interface AccountRow { id: string; total_views: number; last_synced_at: string | null }
+    const accounts = accountsRes.status === "fulfilled" ? (accountsRes.value.data ?? []) as AccountRow[] : []
+    const totalViews = accounts.reduce((s, a) => s + (a.total_views ?? 0), 0)
+
+    const activeCampaigns = campaignsRes.status === "fulfilled"
+      ? (campaignsRes.value.data ?? []).length : 0
+
+    interface PayoutRow { amount: number }
+    const pendingPayouts = payoutsRes.status === "fulfilled"
+      ? (payoutsRes.value.data ?? []).reduce((s: number, p: PayoutRow) => s + (p.amount ?? 0), 0) : 0
+
+    const sevenDaysAgo = Date.now() - 7 * 86400000
+    const creatorAlerts = accounts.filter(
+      (a) => !a.last_synced_at || new Date(a.last_synced_at).getTime() < sevenDaysAgo
+    ).length
+
+    setMetrics({ totalViews, activeCampaigns, pendingPayouts, creatorAlerts })
+
+    // ── Top videos ──
+    interface VideoRow {
+      id: string
+      caption: string | null
+      views: number
+      platform: string
+      tracked_accounts: { username: string; workspace_id: string | null } | null
+    }
+    if (videosRes.status === "fulfilled") {
+      const rows = (videosRes.value.data ?? []) as unknown as VideoRow[]
+      setTopVideos(rows.map((v) => ({
+        id:       v.id,
+        caption:  v.caption ?? "Untitled",
+        creator:  `@${v.tracked_accounts?.username ?? "unknown"}`,
+        views:    v.views ?? 0,
+        platform: v.platform,
+      })))
+    }
+
+    // ── Chart data ──
+    if (dailyRes.status === "fulfilled") {
+      interface DailyRow { date: string; views: number }
+      const rows = (dailyRes.value.data ?? []) as DailyRow[]
+      // Group by date
+      const byDate = new Map<string, number>()
+      for (const r of rows) {
+        byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.views)
+      }
+      setChartData(Array.from(byDate.entries()).map(([date, views]) => ({
+        date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        views,
+      })))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    setLoading(true)
+    load(user.id).finally(() => setLoading(false))
+  }, [user, load])
+
+  async function handleRefresh() {
+    if (!user) return
+    setRefreshing(true)
+    await load(user.id)
+    setRefreshing(false)
+  }
+
+  function fmt(n: number) {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+    if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`
+    return n.toString()
+  }
+
+  const hasAnyData =
+    (metrics?.totalViews ?? 0) > 0 ||
+    (metrics?.activeCampaigns ?? 0) > 0 ||
+    topVideos.length > 0
+
   return (
     <div className="space-y-6 max-w-7xl">
       <CmdKSearch />
+
       {/* Header */}
-      <div>
-        <h1 className="text-[22px] font-semibold text-white tracking-tight">Dashboard</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">
-          Here&apos;s what&apos;s happening with your campaigns today.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-[22px] font-semibold text-white tracking-tight">
+            {user ? `Welcome back, ${user.displayName.split(" ")[0]}` : "Dashboard"}
+          </h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Here&apos;s what&apos;s happening with your campaigns today.</p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={loading || refreshing}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] text-zinc-400 text-xs hover:text-zinc-200 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {metrics.map((metric) => {
-          const Icon = metric.icon
-          const isPositive = metric.changeType === "positive"
-          return (
-            <div
-              key={metric.title}
-              className="rounded-xl border border-white/[0.06] bg-[#111111] p-5 hover:border-white/10 transition-colors"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  {metric.title}
-                </span>
-                <div className={`w-8 h-8 rounded-lg ${metric.bg} flex items-center justify-center`}>
-                  <Icon className={`w-4 h-4 ${metric.color}`} />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-2xl font-bold text-white tracking-tight">{metric.value}</p>
-                <div className="flex items-center gap-1.5">
-                  {isPositive ? (
-                    <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-                  ) : (
-                    <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />
-                  )}
-                  <span
-                    className={`text-xs font-medium ${
-                      isPositive ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {metric.change}
-                  </span>
-                  <span className="text-xs text-zinc-600">{metric.description}</span>
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Chart + Alerts row */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Line chart */}
-        <div className="xl:col-span-2 rounded-xl border border-white/[0.06] bg-[#111111] p-5">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-[15px] font-semibold text-white">Views Overview</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Last 30 days</p>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
-              <TrendingUp className="w-3 h-3" />
-              <span>+18.2%</span>
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="viewsGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: "#52525b", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                interval={6}
-              />
-              <YAxis
-                tick={{ fill: "#52525b", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="views"
-                stroke="#7C3AED"
-                strokeWidth={2}
-                fill="url(#viewsGradient)"
-                dot={false}
-                activeDot={{ r: 4, fill: "#7C3AED", stroke: "#0a0a0a", strokeWidth: 2 }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <MetricSkeleton key={i} />)}
         </div>
-
-        {/* Recent Alerts */}
-        <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-[15px] font-semibold text-white">Recent Alerts</h2>
-            <Link href="/notifications" className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-              View all →
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {recentAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.08] transition-colors"
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[
+            { title: "Total Views",       value: fmt(metrics?.totalViews      ?? 0), icon: Eye,           color: "text-blue-400",   bg: "bg-blue-500/10",   href: "/analytics",  empty: !metrics?.totalViews },
+            { title: "Active Campaigns",  value: String(metrics?.activeCampaigns ?? 0), icon: Megaphone,  color: "text-purple-400", bg: "bg-purple-500/10", href: "/campaigns",  empty: !metrics?.activeCampaigns },
+            { title: "Pending Payouts",   value: `$${fmt(metrics?.pendingPayouts  ?? 0)}`, icon: DollarSign, color: "text-emerald-400", bg: "bg-emerald-500/10", href: "/payments", empty: !metrics?.pendingPayouts },
+            { title: "Creator Alerts",    value: String(metrics?.creatorAlerts   ?? 0), icon: AlertTriangle, color: "text-amber-400", bg: "bg-amber-500/10", href: "/analytics",  empty: false },
+          ].map((m) => {
+            const Icon = m.icon
+            return (
+              <Link key={m.title} href={m.href}
+                className="rounded-xl border border-white/[0.06] bg-[#111111] p-5 hover:border-white/10 transition-colors group"
               >
-                <div className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${alertDots[alert.type]}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-zinc-300 leading-relaxed">{alert.message}</p>
-                  <p className="text-[11px] text-zinc-600 mt-1">{alert.time}</p>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{m.title}</span>
+                  <div className={`w-8 h-8 rounded-lg ${m.bg} flex items-center justify-center`}>
+                    <Icon className={`w-4 h-4 ${m.color}`} />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Top performing videos table */}
-      <div className="rounded-xl border border-white/[0.06] bg-[#111111] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
-          <div>
-            <h2 className="text-[15px] font-semibold text-white">Top Performing Videos</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Sorted by total views this month</p>
-          </div>
-          <button className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-            View all
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/[0.04]">
-                <th className="text-left px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Video
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Campaign
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Views
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Revenue
-                </th>
-                <th className="text-center px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.03]">
-              {topVideos.map((video) => (
-                <tr
-                  key={video.id}
-                  className="hover:bg-white/[0.02] transition-colors group"
-                >
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-purple-600/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
-                        <Play className="w-3.5 h-3.5 text-purple-400" fill="currentColor" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition-colors line-clamp-1">
-                          {video.title}
-                        </p>
-                        <p className="text-xs text-zinc-500">{video.creator}</p>
-                      </div>
+                <div className="space-y-1.5">
+                  <p className="text-2xl font-bold text-white tracking-tight">{m.value}</p>
+                  {m.empty ? (
+                    <p className="text-xs text-zinc-600">No data yet</p>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">View details →</span>
                     </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className="text-xs text-zinc-400">{video.campaign}</span>
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <span className="text-sm font-medium text-zinc-200">{video.views}</span>
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <span className="text-sm font-medium text-emerald-400">{video.revenue}</span>
-                  </td>
-                  <td className="px-4 py-4 text-center">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${
-                        statusColors[video.status as keyof typeof statusColors]
-                      }`}
-                    >
-                      {video.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <button className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/[0.05] transition-all">
-                      <MoreHorizontal className="w-4 h-4 text-zinc-400" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  )}
+                </div>
+              </Link>
+            )
+          })}
         </div>
-      </div>
+      )}
+
+      {/* Empty state — nothing tracked yet */}
+      {!loading && !hasAnyData && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <EmptyCard icon={Users}    title="No creators tracked yet" desc="Add a TikTok, Instagram, or YouTube account to start collecting analytics." href="/analytics" cta="Add your first creator" />
+          <EmptyCard icon={Megaphone} title="No active campaigns"    desc="Create a campaign to assign creators, set budgets, and track performance." href="/campaigns/new" cta="Create your first campaign" />
+          <EmptyCard icon={DollarSign} title="No payouts pending"    desc="Set up payout rules and pay creators automatically based on performance." href="/payments" cta="Set up creator payments" />
+        </div>
+      )}
+
+      {/* Chart + data — only shown when there's real data */}
+      {!loading && hasAnyData && (
+        <>
+          {/* Chart row */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="xl:col-span-2 rounded-xl border border-white/[0.06] bg-[#111111] p-5">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-white">Views Overview</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Last 30 days</p>
+                </div>
+                {chartData.length > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                    <TrendingUp className="w-3 h-3" />
+                    <span>Live data</span>
+                  </div>
+                )}
+              </div>
+              {chartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[240px] text-center gap-2">
+                  <TrendingUp className="w-8 h-8 text-zinc-700" />
+                  <p className="text-sm text-zinc-600">Chart data will appear after the first sync</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="viewsGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor="#7C3AED" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#7C3AED" stopOpacity={0}   />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false} interval={6} />
+                    <YAxis tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area type="monotone" dataKey="views" stroke="#7C3AED" strokeWidth={2} fill="url(#viewsGradient)" dot={false} activeDot={{ r: 4, fill: "#7C3AED", stroke: "#0a0a0a", strokeWidth: 2 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Quick links when no alerts */}
+            <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
+              <h2 className="text-[15px] font-semibold text-white mb-5">Quick Actions</h2>
+              <div className="space-y-2">
+                {[
+                  { label: "Add creator account", href: "/analytics",    icon: Users      },
+                  { label: "Create campaign",      href: "/campaigns/new", icon: Megaphone  },
+                  { label: "View payouts",          href: "/payments",     icon: DollarSign },
+                  { label: "Check trends",          href: "/trends",       icon: TrendingUp },
+                ].map((a) => {
+                  const Icon = a.icon
+                  return (
+                    <Link key={a.href} href={a.href}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-all group"
+                    >
+                      <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="text-sm">{a.label}</span>
+                      <ArrowUpRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Top performing videos */}
+          {topVideos.length > 0 && (
+            <div className="rounded-xl border border-white/[0.06] bg-[#111111] overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-white">Top Performing Videos</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Sorted by total views</p>
+                </div>
+                <Link href="/analytics" className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
+                  View all →
+                </Link>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/[0.04]">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Video</th>
+                      <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Views</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Platform</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.03]">
+                    {topVideos.map((video) => (
+                      <tr key={video.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-purple-600/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
+                              <Play className="w-3.5 h-3.5 text-purple-400" fill="currentColor" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-zinc-200 line-clamp-1">{video.caption}</p>
+                              <p className="text-xs text-zinc-500">{video.creator}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <span className="text-sm font-medium text-zinc-200">{fmt(video.views)}</span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="text-xs text-zinc-500 capitalize">{video.platform}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

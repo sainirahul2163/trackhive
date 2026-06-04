@@ -1,12 +1,22 @@
 import { supabase } from "@/lib/supabase"
 import type { TrackedAccount, TrackedVideo } from "@/types"
 
-export async function fetchTrackedAccounts(): Promise<TrackedAccount[]> {
-  const { data, error } = await supabase
+/**
+ * Returns tracked accounts scoped to the given userId.
+ * Falls back to showing rows where workspace_id is null (legacy seed data)
+ * so existing setups keep working until migrated.
+ */
+export async function fetchTrackedAccounts(userId?: string): Promise<TrackedAccount[]> {
+  let query = supabase
     .from("tracked_accounts")
     .select("*")
     .order("total_views", { ascending: false })
 
+  if (userId) {
+    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+  }
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return data as TrackedAccount[]
 }

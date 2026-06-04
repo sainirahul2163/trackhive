@@ -1,11 +1,17 @@
 import { supabase } from "@/lib/supabase"
 import type { Campaign, CampaignCreator } from "@/types"
 
-export async function fetchCampaigns(): Promise<Campaign[]> {
-  const { data, error } = await supabase
+export async function fetchCampaigns(userId?: string): Promise<Campaign[]> {
+  let query = supabase
     .from("campaigns")
     .select("*")
     .order("created_at", { ascending: false })
+
+  if (userId) {
+    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+  }
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return data as Campaign[]
 }

@@ -1,11 +1,17 @@
 import { supabase } from "@/lib/supabase"
 import type { Competitor, CompetitorAccount, CompetitorVideo, CompetitorCreator, AiReport, Platform } from "@/types"
 
-export async function fetchCompetitors(): Promise<Competitor[]> {
-  const { data, error } = await supabase
+export async function fetchCompetitors(userId?: string): Promise<Competitor[]> {
+  let query = supabase
     .from("competitors")
     .select("*, accounts:competitor_accounts(*)")
     .order("created_at", { ascending: false })
+
+  if (userId) {
+    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+  }
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return data as Competitor[]
 }

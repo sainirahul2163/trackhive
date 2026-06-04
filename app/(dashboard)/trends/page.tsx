@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Search, Bookmark, BookmarkCheck, Play, TrendingUp,
   Sparkles, Copy, Download, ArrowRight, Plus,
@@ -12,6 +12,8 @@ import {
 } from "recharts"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
 import { supabase } from "@/lib/supabase"
+import { fetchTrendVideos, fetchBoards, createBoard } from "@/lib/trends-data"
+import { useUser } from "@/lib/use-user"
 import type { TrendVideo, InspirationBoard, Platform, TrendNiche, ContentFormat } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -44,12 +46,6 @@ const MOCK_VIDEOS: TrendVideo[] = [
   { id: "tv10", workspace_id: null, platform: "tiktok",    video_url: null, thumbnail_url: THUMBNAILS[9],  caption: "Day in the life of a NYC software engineer 👩‍💻",                  creator_handle: "@techlife",      views: 5800000, likes: 450000, engagement_rate: 7.8, virality_score: 8.9, niche: "tech",      content_format: "lifestyle",    posted_at: new Date(Date.now()-86400000).toISOString(),    created_at: "" },
   { id: "tv11", workspace_id: null, platform: "facebook",  video_url: null, thumbnail_url: THUMBNAILS[10], caption: "How I paid off $80K debt in 2 years (real numbers)",              creator_handle: "@debtfree",      views: 1800000, likes: 140000, engagement_rate: 7.8, virality_score: 7.1, niche: "finance",   content_format: "testimonial",  posted_at: new Date(Date.now()-691200000).toISOString(),   created_at: "" },
   { id: "tv12", workspace_id: null, platform: "tiktok",    video_url: null, thumbnail_url: THUMBNAILS[11], caption: "Aesthetic meal prep for the whole week 🥑",                       creator_handle: "@mealqueen",     views: 7200000, likes: 580000, engagement_rate: 8.1, virality_score: 9.3, niche: "food",      content_format: "hook_first",   posted_at: new Date(Date.now()-172800000).toISOString(),   created_at: "" },
-]
-
-const MOCK_BOARDS: InspirationBoard[] = [
-  { id: "b1", workspace_id: null, campaign_id: null, name: "Summer Campaign Ideas", created_at: "" },
-  { id: "b2", workspace_id: null, campaign_id: null, name: "Hook Formulas",         created_at: "" },
-  { id: "b3", workspace_id: null, campaign_id: null, name: "Competitor Analysis",   created_at: "" },
 ]
 
 // ── Config ────────────────────────────────────────────────────
@@ -239,11 +235,12 @@ function SaveToBoardDropdown({
 
 // ── Main component ────────────────────────────────────────────
 export default function TrendsPage() {
+  const { user } = useUser()
   const [activeTab, setActiveTab] = useState<Tab>("Library")
 
-  // Library state
-  const [videos] = useState<TrendVideo[]>(MOCK_VIDEOS)
-  const [boards, setBoards] = useState<InspirationBoard[]>(MOCK_BOARDS)
+  // Library state — videos are global discovery content; boards are user-scoped
+  const [videos, setVideos] = useState<TrendVideo[]>(MOCK_VIDEOS)
+  const [boards, setBoards] = useState<InspirationBoard[]>([])
   const [savedVideoIds, setSavedVideoIds] = useState<Set<string>>(new Set())
   const [savingVideo, setSavingVideo] = useState<TrendVideo | null>(null)
   const [search, setSearch] = useState("")
@@ -254,6 +251,16 @@ export default function TrendsPage() {
   const [newBoardName, setNewBoardName] = useState("")
   const [showNewBoard, setShowNewBoard] = useState(false)
   const [creatingBoard, setCreatingBoard] = useState(false)
+
+  // Load real data — fall back to mock videos if DB is empty
+  useEffect(() => {
+    fetchTrendVideos().then(data => { if (data.length > 0) setVideos(data) }).catch(() => {/* keep mock */})
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    fetchBoards(user.id).then(setBoards).catch(() => setBoards([]))
+  }, [user])
 
   // Brief generator state
   const [briefStep, setBriefStep] = useState<1 | 2 | 3>(1)
@@ -288,16 +295,16 @@ export default function TrendsPage() {
   async function handleCreateBoard() {
     if (!newBoardName.trim()) return
     setCreatingBoard(true)
-    const newBoard: InspirationBoard = {
-      id: Math.random().toString(36).slice(2),
-      workspace_id: null, campaign_id: null,
-      name: newBoardName.trim(), created_at: new Date().toISOString(),
-    }
     try {
-      const { data, error } = await supabase.from("inspiration_boards").insert({ name: newBoardName.trim() }).select().single()
-      if (!error && data) { setBoards(prev => [...prev, data as InspirationBoard]) }
-      else { setBoards(prev => [...prev, newBoard]) }
-    } catch { setBoards(prev => [...prev, newBoard]) }
+      const board = await createBoard(newBoardName.trim())
+      setBoards(prev => [...prev, board])
+    } catch {
+      setBoards(prev => [...prev, {
+        id: Math.random().toString(36).slice(2),
+        workspace_id: null, campaign_id: null,
+        name: newBoardName.trim(), created_at: new Date().toISOString(),
+      }])
+    }
     setNewBoardName(""); setShowNewBoard(false); setCreatingBoard(false)
   }
 

@@ -14,6 +14,7 @@ import {
 import { useState } from "react"
 import { createBrowserClient } from "@supabase/ssr"
 import { cn } from "@/lib/utils"
+import { useUser } from "@/lib/use-user"
 
 const workspaces = [
   { id: "1", name: "Acme Corp", plan: "Pro" },
@@ -30,6 +31,10 @@ const notifications = [
 export function Topbar() {
   const [activeWorkspace, setActiveWorkspace] = useState(workspaces[0])
   const unreadCount = notifications.filter((n) => n.unread).length
+  const { user } = useUser()
+  const displayName = user?.displayName ?? ""
+  const initials    = user?.initials    ?? ""
+  const avatarSrc   = user?.avatarUrl   ?? ""
 
   async function handleSignOut() {
     const supabase = createBrowserClient(
@@ -112,10 +117,10 @@ export function Topbar() {
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-md hover:bg-white/[0.05] transition-colors outline-none cursor-pointer">
             <Avatar className="w-7 h-7">
-              <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=trackhive" />
-              <AvatarFallback className="bg-purple-600 text-white text-xs font-semibold">RH</AvatarFallback>
+              <AvatarImage src={avatarSrc} />
+              <AvatarFallback className="bg-purple-600 text-white text-xs font-semibold">{initials}</AvatarFallback>
             </Avatar>
-            <span className="text-sm text-zinc-300">Rahul</span>
+            <span className="text-sm text-zinc-300">{displayName}</span>
             <ChevronDown className="w-3 h-3 text-zinc-500" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48 bg-[#1a1a1a] border-[#2a2a2a]">

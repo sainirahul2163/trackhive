@@ -10,11 +10,17 @@ export async function fetchTrendVideos(): Promise<TrendVideo[]> {
   return data as TrendVideo[]
 }
 
-export async function fetchBoards(): Promise<InspirationBoard[]> {
-  const { data, error } = await supabase
+export async function fetchBoards(userId?: string): Promise<InspirationBoard[]> {
+  let query = supabase
     .from("inspiration_boards")
     .select("*")
     .order("created_at", { ascending: true })
+
+  if (userId) {
+    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+  }
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return data as InspirationBoard[]
 }

@@ -16,36 +16,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
 import { fetchCompetitors } from "@/lib/competitors-data"
 import { AddCompetitorDrawer } from "@/components/competitors/add-competitor-drawer"
+import { useUser } from "@/lib/use-user"
 import type {
   Competitor, CompetitorVideo,
   CompetitorCreator, AiReport, Platform,
 } from "@/types"
 import { cn } from "@/lib/utils"
 
-// ── Mock data ─────────────────────────────────────────────────
-const MOCK_COMPETITORS: Competitor[] = [
-  {
-    id: "comp1", workspace_id: null, name: "GrowthBrands Co",  website: "growthbrands.co",  logo_url: null, created_at: "",
-    accounts: [
-      { id: "ca1", competitor_id: "comp1", platform: "tiktok",    username: "@growthbrands_tt", avatar_url: null, follower_count: 890000,  total_views: 42000000, avg_views: 680000, posting_frequency: 4.2, created_at: "" },
-      { id: "ca2", competitor_id: "comp1", platform: "instagram", username: "@growthbrands",    avatar_url: null, follower_count: 640000,  total_views: 18000000, avg_views: 290000, posting_frequency: 2.8, created_at: "" },
-    ],
-  },
-  {
-    id: "comp2", workspace_id: null, name: "ViralPush Inc",    website: "viralpush.com",    logo_url: null, created_at: "",
-    accounts: [
-      { id: "ca3", competitor_id: "comp2", platform: "tiktok",    username: "@viralpush",       avatar_url: null, follower_count: 1200000, total_views: 78000000, avg_views: 920000, posting_frequency: 6.1, created_at: "" },
-      { id: "ca4", competitor_id: "comp2", platform: "youtube",   username: "@viralpush_yt",    avatar_url: null, follower_count: 380000,  total_views: 24000000, avg_views: 410000, posting_frequency: 1.5, created_at: "" },
-    ],
-  },
-  {
-    id: "comp3", workspace_id: null, name: "NexGen Creator",   website: "nexgencreator.io", logo_url: null, created_at: "",
-    accounts: [
-      { id: "ca5", competitor_id: "comp3", platform: "instagram", username: "@nexgencreator",   avatar_url: null, follower_count: 520000,  total_views: 14000000, avg_views: 220000, posting_frequency: 3.4, created_at: "" },
-      { id: "ca6", competitor_id: "comp3", platform: "tiktok",    username: "@nexgen_tt",       avatar_url: null, follower_count: 310000,  total_views: 9000000,  avg_views: 180000, posting_frequency: 2.9, created_at: "" },
-    ],
-  },
-]
+// (mock competitors removed — real data fetched from Supabase)
 
 function makeThumbs(seeds: string[]) {
   return seeds.map(s => `https://picsum.photos/seed/${s}/200/120`)
@@ -171,8 +149,9 @@ function ChartTooltip({ active, payload, label }: ChartTTProps) {
 
 // ── Main component ────────────────────────────────────────────
 export default function CompetitorsPage() {
-  const [competitors, setCompetitors] = useState<Competitor[]>(MOCK_COMPETITORS)
-  const [loading, setLoading] = useState(false)
+  const { user } = useUser()
+  const [competitors, setCompetitors] = useState<Competitor[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>("Overview")
@@ -186,17 +165,16 @@ export default function CompetitorsPage() {
   const [videos, setVideos] = useState<Record<string, CompetitorVideo[]>>({})
   const [reports, setReports] = useState<Record<string, AiReport[]>>({})
 
-  // Load from Supabase on mount (with mock fallback)
-  const loadCompetitors = useCallback(async () => {
+  const loadCompetitors = useCallback(async (userId?: string) => {
     setLoading(true); setError(null)
     try {
-      const data = await fetchCompetitors()
-      if (data.length > 0) setCompetitors(data)
-    } catch { /* use mock */ }
+      const data = await fetchCompetitors(userId)
+      setCompetitors(data)
+    } catch { setError("Failed to load competitors") }
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { loadCompetitors() }, [loadCompetitors])
+  useEffect(() => { loadCompetitors(user?.id) }, [loadCompetitors, user?.id])
 
   // Lazy-build detail data when competitor selected
   useEffect(() => {
@@ -291,7 +269,7 @@ export default function CompetitorsPage() {
             <div className="px-4 py-6 text-center">
               <AlertCircle className="w-6 h-6 text-red-400 mx-auto mb-2" />
               <p className="text-xs text-zinc-500">{error}</p>
-              <button onClick={loadCompetitors} className="mt-2 text-xs text-purple-400 hover:text-purple-300">Retry</button>
+              <button onClick={() => loadCompetitors(user?.id)} className="mt-2 text-xs text-purple-400 hover:text-purple-300">Retry</button>
             </div>
           )}
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   DollarSign, Clock, Calendar, Users, TrendingUp,
   Download, Search, ChevronDown, CheckCircle2,
@@ -15,43 +15,12 @@ import { formatNumber } from "@/lib/platform"
 import { InviteCreatorDrawer } from "@/components/payments/invite-creator-drawer"
 import { ProcessPayoutModal } from "@/components/payments/process-payout-modal"
 import { CreateRuleDrawer } from "@/components/payments/create-rule-drawer"
+import { fetchCreators, fetchPayouts, fetchPayoutRules } from "@/lib/payments-data"
+import { useUser } from "@/lib/use-user"
 import type {
   Creator, Payout, PayoutRule,
   PaymentMethod, KycStatus, PayoutStatusType,
 } from "@/types"
-
-// ── Mock data ─────────────────────────────────────────────────
-const MOCK_CREATORS: Creator[] = [
-  { id: "c1", workspace_id: null, name: "Jake Fitness",  email: "jake@jakefit.com",    avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=jake",  payment_method: "paypal", paypal_email: "jake@jakefit.com",    bank_details: null, tax_country: "US", kyc_status: "verified",    total_earned: 24800, total_paid: 21000, invite_token: null, invite_sent_at: null, invite_accepted: true, created_at: "" },
-  { id: "c2", workspace_id: null, name: "Glow Up Daily", email: "hello@glowup.co",     avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=glow",  payment_method: "bank",   paypal_email: null,                  bank_details: null, tax_country: "UK", kyc_status: "verified",    total_earned: 12400, total_paid: 10500, invite_token: null, invite_sent_at: null, invite_accepted: true, created_at: "" },
-  { id: "c3", workspace_id: null, name: "Tech Reviewer", email: "contact@techrev.io",  avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=tech",  payment_method: "wise",   paypal_email: null,                  bank_details: null, tax_country: "DE", kyc_status: "pending",     total_earned: 8600,  total_paid: 7200,  invite_token: null, invite_sent_at: null, invite_accepted: true, created_at: "" },
-  { id: "c4", workspace_id: null, name: "Free Life NYC", email: "mel@freelifenyc.com", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=free",  payment_method: "paypal", paypal_email: "mel@freelifenyc.com", bank_details: null, tax_country: "US", kyc_status: "verified",    total_earned: 6200,  total_paid: 5800,  invite_token: null, invite_sent_at: null, invite_accepted: true, created_at: "" },
-  { id: "c5", workspace_id: null, name: "Money Moves",   email: "info@moneymoves.co",  avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=money", payment_method: "bank",   paypal_email: null,                  bank_details: null, tax_country: "CA", kyc_status: "not_started", total_earned: 3100,  total_paid: 0,     invite_token: null, invite_sent_at: null, invite_accepted: false, created_at: "" },
-]
-
-const MOCK_PAYOUTS: Payout[] = [
-  { id: "p1", workspace_id: null, campaign_id: "1", creator_id: "c1", amount: 7100, base_fee: 800, cpm_earned: 6300, bonus: 0, adjustment: 0, adjustment_note: null, status: "pending",    payment_method: "paypal", invoice_url: null, invoice_number: null, views_count: 1400000, videos_count: 4, paid_at: null, notes: null, created_at: new Date(Date.now()-86400000).toISOString(), creator: MOCK_CREATORS[0], campaign: { id: "1", name: "Summer Drop 2024" } },
-  { id: "p2", workspace_id: null, campaign_id: "1", creator_id: "c2", amount: 4740, base_fee: 600, cpm_earned: 4140, bonus: 0, adjustment: 0, adjustment_note: null, status: "approved",   payment_method: "bank",   invoice_url: null, invoice_number: null, views_count: 920000,  videos_count: 3, paid_at: null, notes: null, created_at: new Date(Date.now()-172800000).toISOString(), creator: MOCK_CREATORS[1], campaign: { id: "1", name: "Summer Drop 2024" } },
-  { id: "p3", workspace_id: null, campaign_id: "2", creator_id: "c3", amount: 2540, base_fee: 300, cpm_earned: 2240, bonus: 0, adjustment: 0, adjustment_note: null, status: "on_hold",   payment_method: "wise",   invoice_url: null, invoice_number: null, views_count: 520000,  videos_count: 1, paid_at: null, notes: null, created_at: new Date(Date.now()-259200000).toISOString(), creator: MOCK_CREATORS[2], campaign: { id: "2", name: "GadgetHive Q2" } },
-  { id: "p4", workspace_id: null, campaign_id: "4", creator_id: "c1", amount: 12500, base_fee: 1000, cpm_earned: 10500, bonus: 1000, adjustment: 0, adjustment_note: null, status: "paid", payment_method: "paypal", invoice_url: "#", invoice_number: "INV-001", views_count: 4200000, videos_count: 8, paid_at: new Date(Date.now()-604800000).toISOString(), notes: null, created_at: new Date(Date.now()-864000000).toISOString(), creator: MOCK_CREATORS[0], campaign: { id: "4", name: "Glow Summer Campaign" } },
-  { id: "p5", workspace_id: null, campaign_id: "4", creator_id: "c2", amount: 8900, base_fee: 750, cpm_earned: 7150, bonus: 1000, adjustment: 0, adjustment_note: null, status: "paid",   payment_method: "bank",   invoice_url: "#", invoice_number: "INV-002", views_count: 2800000, videos_count: 6, paid_at: new Date(Date.now()-518400000).toISOString(), notes: null, created_at: new Date(Date.now()-777600000).toISOString(), creator: MOCK_CREATORS[1], campaign: { id: "4", name: "Glow Summer Campaign" } },
-  { id: "p6", workspace_id: null, campaign_id: "3", creator_id: "c4", amount: 2420, base_fee: 400, cpm_earned: 2020, bonus: 0, adjustment: 0, adjustment_note: null, status: "pending",   payment_method: "paypal", invoice_url: null, invoice_number: null, views_count: 400000,  videos_count: 4, paid_at: null, notes: null, created_at: new Date(Date.now()-3600000).toISOString(), creator: MOCK_CREATORS[3], campaign: { id: "3", name: "Creator Life Series" } },
-]
-
-const MOCK_RULES: PayoutRule[] = [
-  { id: "r1", workspace_id: null, name: "Standard Creator", base_fee: 150, cpm_rate: 3.0,  milestone_bonus: 0,    milestone_views: 0,       performance_cap: 1500, payout_window_days: 30, is_default: true,  created_at: "" },
-  { id: "r2", workspace_id: null, name: "Premium Creator",  base_fee: 300, cpm_rate: 5.5,  milestone_bonus: 1000, milestone_views: 1000000, performance_cap: 5000, payout_window_days: 14, is_default: false, created_at: "" },
-  { id: "r3", workspace_id: null, name: "Budget Campaign",  base_fee: 75,  cpm_rate: 1.5,  milestone_bonus: 0,    milestone_views: 0,       performance_cap: 500,  payout_window_days: 30, is_default: false, created_at: "" },
-]
-
-const MONTHLY_DATA = [
-  { month: "Jan", amount: 8200  },
-  { month: "Feb", amount: 11500 },
-  { month: "Mar", amount: 9800  },
-  { month: "Apr", amount: 21400 },
-  { month: "May", amount: 14700 },
-  { month: "Jun", amount: 16800 },
-]
 
 // ── Config maps ───────────────────────────────────────────────
 const PAYOUT_STATUS_CFG: Record<PayoutStatusType, { label: string; className: string }> = {
@@ -110,14 +79,31 @@ type Tab = typeof TABS[number]
 
 // ── Main component ────────────────────────────────────────────
 export default function PaymentsPage() {
+  const { user } = useUser()
   const [activeTab, setActiveTab] = useState<Tab>("Overview")
-  const [payouts, setPayouts] = useState<Payout[]>(MOCK_PAYOUTS)
-  const [rules, setRules] = useState<PayoutRule[]>(MOCK_RULES)
+  const [payouts, setPayouts] = useState<Payout[]>([])
+  const [rules, setRules] = useState<PayoutRule[]>([])
+  const [creators, setCreators] = useState<Creator[]>([])
   const [historySearch, setHistorySearch] = useState("")
   const [showInviteDrawer, setShowInviteDrawer] = useState(false)
   const [showProcessModal, setShowProcessModal] = useState(false)
   const [showRuleDrawer, setShowRuleDrawer] = useState(false)
   const [selectedPayout, setSelectedPayout] = useState<Payout | null>(null)
+
+  const load = useCallback(async (userId?: string) => {
+    try {
+      const [p, r, c] = await Promise.all([
+        fetchPayouts(undefined, userId),
+        fetchPayoutRules(userId),
+        fetchCreators(userId),
+      ])
+      setPayouts(p)
+      setRules(r)
+      setCreators(c)
+    } catch { /* tables may not exist yet; stay empty */ }
+  }, [])
+
+  useEffect(() => { load(user?.id) }, [load, user?.id])
 
   const pendingPayouts = payouts.filter(p => p.status === "pending" || p.status === "approved")
   const historyPayouts = payouts.filter(p => p.status === "paid" || p.status === "failed")
@@ -133,8 +119,28 @@ export default function PaymentsPage() {
       const d = new Date(p.created_at); const now = new Date()
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     }).reduce((s, p) => s + p.amount, 0),
-    creatorsBalance: MOCK_CREATORS.filter(c => c.total_earned > c.total_paid).length,
+    creatorsBalance: creators.filter(c => c.total_earned > c.total_paid).length,
   }
+
+  // Build last-6-months chart from real paid payouts
+  const monthlyData = (() => {
+    const now = new Date()
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+      return {
+        month: d.toLocaleDateString("en-US", { month: "short" }),
+        year:  d.getFullYear(),
+        mIdx:  d.getMonth(),
+        amount: 0,
+      }
+    })
+    for (const p of payouts.filter(x => x.status === "paid" && x.paid_at)) {
+      const d = new Date(p.paid_at!)
+      const bucket = months.find(m => m.mIdx === d.getMonth() && m.year === d.getFullYear())
+      if (bucket) bucket.amount += p.amount
+    }
+    return months
+  })()
 
   function handlePayNow(payout: Payout) {
     setSelectedPayout(payout)
@@ -225,7 +231,7 @@ export default function PaymentsPage() {
               <p className="text-xs text-zinc-500 mt-0.5">Last 6 months</p>
             </div>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={MONTHLY_DATA} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <BarChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                 <XAxis dataKey="month" tick={{ fill: "#52525b", fontSize: 12 }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
@@ -425,7 +431,7 @@ export default function PaymentsPage() {
       {activeTab === "Creators" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-500">{MOCK_CREATORS.length} creators</p>
+            <p className="text-sm text-zinc-500">{creators.length} creators</p>
             <button onClick={() => setShowInviteDrawer(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-sm font-medium transition-all border border-purple-500/20">
               <Plus className="w-3.5 h-3.5" />
               Invite Creator
@@ -438,7 +444,7 @@ export default function PaymentsPage() {
                 <Th>Creator</Th><Th>Payment Method</Th><Th right>Total Earned</Th><Th right>Outstanding</Th><Th>KYC</Th><Th>Actions</Th>
               </tr></thead>
               <tbody className="divide-y divide-white/[0.03]">
-                {MOCK_CREATORS.map(c => {
+                {creators.map(c => {
                   const kyc = KYC_CFG[c.kyc_status]
                   const KycIcon = kyc.icon
                   const outstanding = c.total_earned - c.total_paid

@@ -1,32 +1,46 @@
 import { supabase } from "@/lib/supabase"
 import type { Creator, Payout, PayoutRule } from "@/types"
 
-export async function fetchCreators(): Promise<Creator[]> {
-  const { data, error } = await supabase
+export async function fetchCreators(userId?: string): Promise<Creator[]> {
+  let query = supabase
     .from("creators")
     .select("*")
     .order("created_at", { ascending: false })
+
+  if (userId) {
+    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+  }
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return data as Creator[]
 }
 
-export async function fetchPayouts(status?: string): Promise<Payout[]> {
+export async function fetchPayouts(status?: string, userId?: string): Promise<Payout[]> {
   let query = supabase
     .from("payouts")
     .select("*, creator:creators(*), campaign:campaigns(id,name)")
     .order("created_at", { ascending: false })
 
   if (status) query = query.eq("status", status)
+  if (userId) query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+
   const { data, error } = await query
   if (error) throw new Error(error.message)
   return data as Payout[]
 }
 
-export async function fetchPayoutRules(): Promise<PayoutRule[]> {
-  const { data, error } = await supabase
+export async function fetchPayoutRules(userId?: string): Promise<PayoutRule[]> {
+  let query = supabase
     .from("payout_rules")
     .select("*")
     .order("is_default", { ascending: false })
+
+  if (userId) {
+    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+  }
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return data as PayoutRule[]
 }

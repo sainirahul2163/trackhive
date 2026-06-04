@@ -14,6 +14,7 @@ import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
 import { CmdKSearch } from "@/components/ui/cmd-search"
 import { fetchTrackedAccounts } from "@/lib/analytics-data"
 import { supabase } from "@/lib/supabase"
+import { useUser } from "@/lib/use-user"
 import type { TrackedAccount, Platform } from "@/types"
 
 const PLATFORMS: { value: Platform | "all"; label: string }[] = [
@@ -69,6 +70,7 @@ function TableSkeleton() {
 
 export default function AnalyticsPage() {
   const router = useRouter()
+  const { user } = useUser()
   const [accounts, setAccounts] = useState<TrackedAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -77,11 +79,11 @@ export default function AnalyticsPage() {
   const [sort, setSort] = useState("total_views")
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (userId?: string) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchTrackedAccounts()
+      const data = await fetchTrackedAccounts(userId)
       setAccounts(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load accounts.")
@@ -90,7 +92,7 @@ export default function AnalyticsPage() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(user?.id) }, [load, user?.id])
 
   const filtered = accounts
     .filter((a) => {
@@ -126,7 +128,7 @@ export default function AnalyticsPage() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ accountId: id }),
       })
-      await load()
+      await load(user?.id)
     } finally {
       setSyncingId(null)
     }
@@ -238,7 +240,7 @@ export default function AnalyticsPage() {
           <p className="text-sm font-medium text-white mb-1">Failed to load accounts</p>
           <p className="text-xs text-zinc-500 mb-4 text-center max-w-xs">{error}</p>
           <button
-            onClick={load}
+            onClick={() => load(user?.id)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.09] text-zinc-200 text-sm font-medium transition-all"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -374,7 +376,7 @@ export default function AnalyticsPage() {
           </div>
           <div className="px-5 py-3 border-t border-white/[0.04] flex items-center justify-between">
             <p className="text-xs text-zinc-600">{filtered.length} account{filtered.length !== 1 ? "s" : ""}</p>
-            <button onClick={load} className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+            <button onClick={() => load(user?.id)} className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
               <RefreshCw className="w-3 h-3" />
               Refresh
             </button>

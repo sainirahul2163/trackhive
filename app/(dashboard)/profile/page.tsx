@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   User, Mail, Lock, Camera, Save, Eye, EyeOff,
   CheckCircle2, Shield, Trash2, AlertTriangle, LogOut,
@@ -8,6 +8,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
 import { createBrowserClient } from "@supabase/ssr"
+import { Skeleton } from "@/components/ui/skeleton"
 
 /* ─── Types ─────────────────────────────────────────── */
 interface ProfileForm {
@@ -64,13 +65,38 @@ function Field({
 /* ─── Page ───────────────────────────────────────────── */
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileForm>({
-    name: "Rahul Saini",
-    email: "rahul@trackhive.io",
-    jobTitle: "Founder",
+    name: "",
+    email: "",
+    jobTitle: "",
     timezone: "Asia/Kolkata",
   })
-  const [avatarSrc, setAvatarSrc] = useState("https://api.dicebear.com/7.x/avataaars/svg?seed=trackhive")
+  const [avatarSrc, setAvatarSrc] = useState("")
+  const [profileLoading, setProfileLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    )
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      const meta     = (user.user_metadata ?? {}) as Record<string, string>
+      const fullName = meta.full_name ?? meta.name ?? ""
+      const email    = user.email ?? ""
+      const jobTitle = meta.job_title ?? ""
+      const timezone = meta.timezone ?? "Asia/Kolkata"
+      const avatar   =
+        meta.avatar_url ??
+        meta.picture ??
+        `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fullName || email)}&backgroundColor=7C3AED&textColor=ffffff`
+
+      setProfile({ name: fullName || email.split("@")[0], email, jobTitle, timezone })
+      setAvatarSrc(avatar)
+      setProfileLoading(false)
+    })
+  }, [])
+
 
   const [currentPwd, setCurrentPwd] = useState("")
   const [newPwd, setNewPwd]         = useState("")
@@ -95,9 +121,37 @@ export default function ProfilePage() {
   async function handleSaveProfile() {
     if (!profile.name.trim()) { toast.error("Name is required"); return }
     setSaving(true)
-    await new Promise(r => setTimeout(r, 900))
-    setSaving(false)
-    toast.success("Profile updated")
+    try {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      )
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          full_name: profile.name,
+          job_title: profile.jobTitle,
+          timezone:  profile.timezone,
+        },
+      })
+      if (error) throw error
+
+      // Also upsert into profiles table (created in migration 006)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from("profiles").upsert({
+          id:         user.id,
+          full_name:  profile.name,
+          email:      profile.email,
+          avatar_url: avatarSrc,
+        })
+      }
+
+      toast.success("Profile updated")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save profile")
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleChangePassword() {
@@ -105,10 +159,20 @@ export default function ProfilePage() {
     if (newPwd.length < 8) { toast.error("Password must be at least 8 characters"); return }
     if (newPwd !== confirmPwd) { toast.error("Passwords don't match"); return }
     setSavingPwd(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setSavingPwd(false)
-    setCurrentPwd(""); setNewPwd(""); setConfirmPwd("")
-    toast.success("Password changed successfully")
+    try {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      )
+      const { error } = await supabase.auth.updateUser({ password: newPwd })
+      if (error) throw error
+      setCurrentPwd(""); setNewPwd(""); setConfirmPwd("")
+      toast.success("Password changed successfully")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to change password")
+    } finally {
+      setSavingPwd(false)
+    }
   }
 
   async function handleSignOut() {
@@ -127,6 +191,20 @@ export default function ProfilePage() {
 
   const strengthLabels = ["", "Weak", "Fair", "Good", "Strong"]
   const strengthColors = ["", "#ef4444", "#f59e0b", "#3b82f6", "#10b981"]
+
+  if (profileLoading) {
+    return (
+      <div className="max-w-2xl space-y-5">
+        <div><Skeleton className="h-6 w-32 mb-2" /><Skeleton className="h-4 w-64" /></div>
+        <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-6 space-y-4">
+          <div className="flex items-center gap-5"><Skeleton className="w-16 h-16 rounded-full" /><div className="space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-24" /></div></div>
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-2xl space-y-5">

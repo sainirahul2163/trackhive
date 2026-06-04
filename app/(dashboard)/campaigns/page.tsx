@@ -10,6 +10,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { fetchCampaigns } from "@/lib/campaigns-data"
 import { formatNumber } from "@/lib/platform"
+import { useUser } from "@/lib/use-user"
 import type { Campaign, CampaignStatus } from "@/types"
 
 const STATUS_CONFIG: Record<CampaignStatus, {
@@ -67,16 +68,17 @@ function CardSkeleton() {
 }
 
 export default function CampaignsPage() {
+  const { user } = useUser()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<CampaignStatus | "all">("all")
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (userId?: string) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchCampaigns()
+      const data = await fetchCampaigns(userId)
       setCampaigns(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load campaigns.")
@@ -85,7 +87,7 @@ export default function CampaignsPage() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(user?.id) }, [load, user?.id])
 
   const filtered = filter === "all" ? campaigns : campaigns.filter(c => c.status === filter)
 
@@ -169,7 +171,7 @@ export default function CampaignsPage() {
           <AlertCircle className="w-8 h-8 text-red-400 mb-3" />
           <p className="text-sm font-medium text-white mb-1">Failed to load campaigns</p>
           <p className="text-xs text-zinc-500 mb-4 text-center max-w-xs">{error}</p>
-          <button onClick={load} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.09] text-zinc-200 text-sm font-medium transition-all">
+          <button onClick={() => load(user?.id)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.09] text-zinc-200 text-sm font-medium transition-all">
             <RefreshCw className="w-3.5 h-3.5" />
             Retry
           </button>
