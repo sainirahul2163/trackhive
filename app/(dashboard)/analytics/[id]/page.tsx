@@ -127,7 +127,7 @@ function calcEstCpmValue(platform: Platform, totalViews: number): string {
   return `$${value.toFixed(2)}`
 }
 
-function buildEngagementData(videos: TrackedVideo[]) {
+function buildEngagementData(videos: TrackedVideo[], includeShares: boolean) {
   const totals = videos.reduce(
     (acc, v) => ({
       likes:    acc.likes    + Number(v.likes    ?? 0),
@@ -137,11 +137,20 @@ function buildEngagementData(videos: TrackedVideo[]) {
     { likes: 0, comments: 0, shares: 0 },
   )
 
-  return [
+  const segments = [
     { name: "Likes",    value: totals.likes,    color: "#a855f7" },
     { name: "Comments", value: totals.comments, color: "#3b82f6" },
-    { name: "Shares",   value: totals.shares,   color: "#10b981" },
   ]
+
+  if (includeShares) {
+    segments.push({ name: "Shares", value: totals.shares, color: "#10b981" })
+  }
+
+  return segments
+}
+
+function formatSharesValue(platform: Platform, shares: number): string {
+  return platform === "instagram" ? "N/A" : formatNumber(shares)
 }
 
 function formatChartViews(v: number): string {
@@ -447,7 +456,11 @@ export default function AccountDetailPage() {
 
   const displayData: PerformanceChartPoint[] =
     chartTab === "views" ? viewsChartData : followerChartData
-  const engagementData = useMemo(() => buildEngagementData(videos), [videos])
+  const isInstagram = account?.platform === "instagram"
+  const engagementData = useMemo(
+    () => buildEngagementData(videos, !isInstagram),
+    [videos, isInstagram],
+  )
   const weeklyData = useMemo(() => buildWeeklyData(videos), [videos])
 
   const sortedVideos = useMemo(() => [...videos].sort((a, b) => {
@@ -696,7 +709,7 @@ export default function AccountDetailPage() {
                   { icon: Eye,           value: formatNumber(topVideo.views ?? 0), label: "views",    color: "text-blue-400" },
                   { icon: Heart,         value: formatNumber(topVideo.likes),        label: "likes",    color: "text-pink-400" },
                   { icon: MessageCircle, value: formatNumber(topVideo.comments),      label: "comments", color: "text-emerald-400" },
-                  { icon: Share2,        value: formatNumber(topVideo.shares),       label: "shares",   color: "text-amber-400" },
+                  { icon: Share2,        value: formatSharesValue(account.platform, topVideo.shares), label: "shares", color: "text-amber-400" },
                 ].map(m => {
                   const Icon = m.icon
                   return (
@@ -786,7 +799,7 @@ export default function AccountDetailPage() {
                     </td>
                     <td className="px-4 py-4 text-right"><span className="text-sm text-zinc-400">{formatNumber(video.likes)}</span></td>
                     <td className="px-4 py-4 text-right"><span className="text-sm text-zinc-400">{formatNumber(video.comments)}</span></td>
-                    <td className="px-4 py-4 text-right"><span className="text-sm text-zinc-400">{formatNumber(video.shares)}</span></td>
+                    <td className="px-4 py-4 text-right"><span className="text-sm text-zinc-400">{formatSharesValue(account.platform, video.shares)}</span></td>
                     <td className="px-4 py-4 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${vl.className}`}>{vl.label}</span>
                     </td>
