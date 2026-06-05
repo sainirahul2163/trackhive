@@ -26,6 +26,22 @@ interface SyncResult {
 
 const ONE_HOUR_MS = 60 * 60 * 1000
 
+/** Columns that exist on tracked_videos (per migrations 001 + 008). */
+interface TrackedVideoRow {
+  account_id:      string
+  platform:        TrackedAccountRow["platform"]
+  video_url:       string
+  thumbnail_url:   string | null
+  caption:         string | null
+  views:           number
+  likes:           number
+  comments:        number
+  shares:          number
+  engagement_rate: number
+  virality_score:  number
+  posted_at:       string | null
+}
+
 export async function POST(req: Request) {
   // Optional: single-account sync via body { accountId }
   let accountId: string | null = null
@@ -122,7 +138,6 @@ async function syncTikTok(
     })
     .eq("id", account.id)
 
-  // Upsert videos into tracked_videos
   for (const video of videos) {
     const videoUrl = `https://www.tiktok.com/@${account.username}/video/${video.id}`
     const engagementRate = video.views
@@ -130,29 +145,22 @@ async function syncTikTok(
       : 0
     const viralityScore = Math.min(10, Math.round((video.views / 100_000) * 10) / 10)
 
-    const { data: upserted } = await supabase
-      .from("tracked_videos")
-      .upsert(
-        {
-          account_id:      account.id,
-          platform:        "tiktok",
-          video_url:       videoUrl,
-          thumbnail_url:   video.thumbnail,
-          caption:         video.description,
-          views:           video.views,
-          likes:           video.likes,
-          comments:        video.comments,
-          shares:          video.shares,
-          saves:           0,
-          engagement_rate: Math.round(engagementRate * 100) / 100,
-          virality_score:  viralityScore,
-          posted_at:       video.created_at,
-        },
-        { onConflict: "video_url" },
-      )
-      .select("id")
-      .single()
+    const payload: TrackedVideoRow = {
+      account_id:      account.id,
+      platform:        "tiktok",
+      video_url:       videoUrl,
+      thumbnail_url:   video.thumbnail || null,
+      caption:         video.description || null,
+      views:           video.views,
+      likes:           video.likes,
+      comments:        video.comments,
+      shares:          video.shares,
+      engagement_rate: Math.round(engagementRate * 100) / 100,
+      virality_score:  viralityScore,
+      posted_at:       video.created_at || null,
+    }
 
+    const upserted = await upsertTrackedVideo(supabase, payload)
     if (upserted?.id) {
       await insertDailySnapshot(supabase, upserted.id, video)
     }
@@ -197,29 +205,22 @@ async function syncInstagram(
       : 0
     const viralityScore = Math.min(10, Math.round((reel.views / 50_000) * 10) / 10)
 
-    const { data: upserted } = await supabase
-      .from("tracked_videos")
-      .upsert(
-        {
-          account_id:      account.id,
-          platform:        "instagram",
-          video_url:       videoUrl,
-          thumbnail_url:   reel.thumbnail,
-          caption:         reel.caption,
-          views:           reel.views,
-          likes:           reel.likes,
-          comments:        reel.comments,
-          shares:          0,
-          saves:           0,
-          engagement_rate: Math.round(engagementRate * 100) / 100,
-          virality_score:  viralityScore,
-          posted_at:       reel.created_at,
-        },
-        { onConflict: "video_url" },
-      )
-      .select("id")
-      .single()
+    const payload: TrackedVideoRow = {
+      account_id:      account.id,
+      platform:        "instagram",
+      video_url:       videoUrl,
+      thumbnail_url:   reel.thumbnail || null,
+      caption:         reel.caption || null,
+      views:           reel.views,
+      likes:           reel.likes,
+      comments:        reel.comments,
+      shares:          0,
+      engagement_rate: Math.round(engagementRate * 100) / 100,
+      virality_score:  viralityScore,
+      posted_at:       reel.created_at || null,
+    }
 
+    const upserted = await upsertTrackedVideo(supabase, payload)
     if (upserted?.id) {
       await insertDailySnapshot(supabase, upserted.id, {
         views:    reel.views,
@@ -232,6 +233,53 @@ async function syncInstagram(
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Insert or update by account_id + video_url (no unique constraint on video_url for upsert). */
+async function upsertTrackedVideo(
+  supabase: ReturnType<typeof createServerSupabase>,
+  payload: TrackedVideoRow,
+): Promise<{ id: string } | null> {
+  console.log("[sync] tracked_videos payload:", JSON.stringify(payload))
+
+  const { data: existing, error: findErr } = await supabase
+    .from("tracked_videos")
+    .select("id")
+    .eq("account_id", payload.account_id)
+    .eq("video_url", payload.video_url)
+    .maybeSingle()
+
+  if (findErr) {
+    console.error("[sync] tracked_videos lookup error:", findErr.message)
+    throw new Error(findErr.message)
+  }
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("tracked_videos")
+      .update(payload)
+      .eq("id", existing.id)
+      .select("id")
+      .single()
+
+    if (error) {
+      console.error("[sync] tracked_videos update error:", error.message, payload)
+      throw new Error(error.message)
+    }
+    return data
+  }
+
+  const { data, error } = await supabase
+    .from("tracked_videos")
+    .insert(payload)
+    .select("id")
+    .single()
+
+  if (error) {
+    console.error("[sync] tracked_videos insert error:", error.message, payload)
+    throw new Error(error.message)
+  }
+  return data
+}
 
 function computeEngagementRate(
   items: { views: number; likes: number; comments: number; shares: number }[],
