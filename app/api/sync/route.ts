@@ -7,6 +7,8 @@ import {
   fetchInstagramReelsApify,
   EnsembleDataError,
   PLATFORM_LIMITATIONS,
+  type TikTokVideo,
+  type InstagramPost,
 } from "@/lib/ensembledata"
 
 
@@ -149,13 +151,12 @@ async function syncTikTok(
       continue
     }
 
+    console.log("[TikTok raw video]", JSON.stringify(video).substring(0, 800))
+
     const views    = toNum(video.views)
     const likes    = toNum(video.likes)
     const comments = toNum(video.comments)
-    const shares   = toNum(video.shares)
-    console.log("[sync] TikTok video fields:", JSON.stringify({
-      id: video.id, views, likes, comments, shares, thumbnail: video.thumbnail,
-    }))
+    const shares   = resolveTikTokShares(video)
     const engagementRate = views
       ? (((likes + comments + shares) / views) * 100)
       : 0
@@ -229,11 +230,12 @@ async function syncInstagram(
       continue
     }
 
+    console.log("[Instagram raw reel]", JSON.stringify(reel).substring(0, 800))
+
     const views    = toNum(reel.views)
     const likes    = toNum(reel.likes)
     const comments = toNum(reel.comments)
-    const shares   = toNum(reel.shares)
-    console.log("[Instagram reel raw]", JSON.stringify(reel).substring(0, 800))
+    const shares   = resolveInstagramShares(reel)
     const engagementRate = views
       ? (((likes + comments + shares) / views) * 100)
       : 0
@@ -266,6 +268,46 @@ async function syncInstagram(
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+interface TikTokVideoWithShares extends TikTokVideo {
+  shareCount?:   number
+  share_count?:  number
+  statistics?:   { shareCount?: number; share_count?: number }
+  stats?:        { shareCount?: number; share_count?: number }
+  authorStats?:  { shareCount?: number }
+}
+
+interface InstagramReelWithShares extends InstagramPost {
+  sharesCount?:     number
+  videoShareCount?: number
+  shareCount?:      number
+}
+
+function resolveTikTokShares(video: TikTokVideo): number {
+  const v = video as TikTokVideoWithShares
+  return toNum(
+    v.shares ??
+    v.shareCount ??
+    v.share_count ??
+    v.statistics?.shareCount ??
+    v.statistics?.share_count ??
+    v.stats?.shareCount ??
+    v.stats?.share_count ??
+    v.authorStats?.shareCount ??
+    0,
+  )
+}
+
+function resolveInstagramShares(reel: InstagramPost): number {
+  const r = reel as InstagramReelWithShares
+  return toNum(
+    r.shares ??
+    r.sharesCount ??
+    r.videoShareCount ??
+    r.shareCount ??
+    0,
+  )
+}
 
 function resolveThumbnailUrl(url: string | null | undefined): string | null {
   const trimmed = url?.trim()

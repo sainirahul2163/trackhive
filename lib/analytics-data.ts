@@ -110,40 +110,6 @@ export async function fetchDailyStats(accountId: string, days = 30): Promise<Dai
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
 }
 
-/** Synthetic daily views from posted_at + real video_daily_stats merged. */
-export function buildDailyViewsChart(
-  videos:     TrackedVideo[],
-  dailyStats: DailyViewsPoint[],
-): DailyViewsPoint[] {
-  const byDate = new Map<string, DailyViewsPoint>()
-
-  for (const v of videos) {
-    if (!v.posted_at) continue
-    const date = v.posted_at.slice(0, 10)
-    const views = Number(v.views ?? 0)
-    const existing = byDate.get(date)
-    if (existing) {
-      existing.views += views
-    } else {
-      byDate.set(date, { date, views, likes: 0, comments: 0, shares: 0 })
-    }
-  }
-
-  for (const row of dailyStats) {
-    const existing = byDate.get(row.date)
-    if (existing) {
-      existing.views    = Math.max(existing.views, row.views)
-      existing.likes    = row.likes
-      existing.comments = row.comments
-      existing.shares   = row.shares
-    } else {
-      byDate.set(row.date, { ...row })
-    }
-  }
-
-  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
-}
-
 export function filterStatsByDays<T extends { date: string }>(points: T[], days: number): T[] {
   const since = new Date()
   since.setDate(since.getDate() - days)

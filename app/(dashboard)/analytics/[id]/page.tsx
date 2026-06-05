@@ -24,7 +24,6 @@ import {
   fetchDailyStats,
   fetchAccountVideoAggregates,
   fetchFollowerSnapshots,
-  buildDailyViewsChart,
   filterStatsByDays,
   type DailyViewsPoint,
   type AccountVideoAggregates,
@@ -410,19 +409,14 @@ export default function AccountDetailPage() {
     }
   }
 
-  const mergedDailyViews = useMemo(
-    () => buildDailyViewsChart(videos, dailyStats),
-    [videos, dailyStats],
-  )
-
   const viewsChartData = useMemo(
     (): PerformanceChartPoint[] =>
-      filterStatsByDays(mergedDailyViews, activeDays).map((d) => ({
+      filterStatsByDays(dailyStats, activeDays).map((d) => ({
         date:      new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         views:     d.views,
         followers: 0,
       })),
-    [mergedDailyViews, activeDays],
+    [dailyStats, activeDays],
   )
 
   const followerChartData = useMemo(
@@ -592,7 +586,7 @@ export default function AccountDetailPage() {
               </p>
               <p className="text-xs text-zinc-600 mt-1">
                 {chartTab === "views"
-                  ? "Sync this account to start collecting daily stats"
+                  ? "Sync this account daily to build view history"
                   : "Sync this account to record follower snapshots"}
               </p>
             </div>

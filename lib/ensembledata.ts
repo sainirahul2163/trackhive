@@ -88,6 +88,8 @@ interface ApifyReelRaw {
   images?:        string[]
   sharesCount?:     number
   videoShareCount?: number
+  shareCount?:      number
+  shares?:          number
 }
 
 interface ApifyProfileRaw {
@@ -163,18 +165,33 @@ interface TTPostRaw {
     share_count?:   number
     shareCount?:    number
   }
+  shareCount?:   number
+  share_count?:  number
+  authorStats?: {
+    shareCount?: number
+  }
 }
 
-/** TikTok shares: share_count / shareCount on statistics or stats. */
+/** TikTok shares: try all known EnsembleData field paths. */
 export function extractTikTokShares(post: TTPostRaw): number {
   const stats = post.statistics ?? post.stats
-  if (!stats) return 0
-  const n = stats.share_count ?? stats.shareCount ?? 0
+  const n =
+    post.shareCount ??
+    post.share_count ??
+    stats?.shareCount ??
+    stats?.share_count ??
+    post.authorStats?.shareCount ??
+    0
   return Number.isFinite(Number(n)) ? Number(n) : 0
 }
 
 function extractInstagramShares(reel: ApifyReelRaw): number {
-  const n = reel.sharesCount ?? reel.videoShareCount ?? 0
+  const n =
+    reel.sharesCount ??
+    reel.videoShareCount ??
+    reel.shareCount ??
+    reel.shares ??
+    0
   return Number.isFinite(Number(n)) ? Number(n) : 0
 }
 
