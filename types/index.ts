@@ -71,6 +71,8 @@ export interface TrackedAccount {
   last_synced_at: string | null
   created_at: string
   views_available?: boolean
+  creator_id?: string | null
+  tracking_limit?: number
 }
 
 export type ViralityLabel = "Hot" | "Rising" | "Normal"
@@ -92,6 +94,8 @@ export interface TrackedVideo {
   tags: string[]
   posted_at: string | null
   created_at: string
+  duration_seconds?: number | null
+  audio_name?: string | null
 }
 
 export interface VideoDailyStat {
@@ -173,6 +177,9 @@ export interface Creator {
   id: string
   workspace_id: string | null
   name: string
+  first_name?: string | null
+  last_name?: string | null
+  internal_notes?: string | null
   email: string | null
   avatar_url: string | null
   payment_method: PaymentMethod

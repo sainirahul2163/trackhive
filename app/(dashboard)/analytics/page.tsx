@@ -5,17 +5,22 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Plus, Search, RefreshCw, Trash2, Eye,
-  Users, TrendingUp, Globe, ChevronDown, AlertCircle,
+  Users, TrendingUp, Globe, AlertCircle, Heart, MessageCircle, Share2, Video,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AddAccountDrawer } from "@/components/analytics/add-account-drawer"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
 import { CmdKSearch } from "@/components/ui/cmd-search"
-import { fetchTrackedAccounts } from "@/lib/analytics-data"
+import { fetchAccountsWithTotals, type AccountWithTotals } from "@/lib/analytics-queries"
+import {
+  AnalyticsBreadcrumb, ExportCsvButton, TablePagination, PostActivitySparkline,
+} from "@/components/analytics/analytics-shared"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/use-user"
 import type { TrackedAccount, Platform } from "@/types"
+
+type SortKey = "username" | "followers" | "total_views" | "avg_views" | "engagement_rate" | "video_count" | "total_likes" | "total_comments" | "total_shares" | "last_synced_at"
 
 const PLATFORMS: { value: Platform | "all"; label: string }[] = [
   { value: "all", label: "All Platforms" },
@@ -25,12 +30,6 @@ const PLATFORMS: { value: Platform | "all"; label: string }[] = [
   { value: "facebook", label: "Facebook" },
 ]
 
-const SORT_OPTIONS = [
-  { value: "total_views", label: "Total Views" },
-  { value: "followers", label: "Followers" },
-  { value: "engagement", label: "Engagement Rate" },
-  { value: "avg_views", label: "Avg Views" },
-]
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "Never"
@@ -71,19 +70,22 @@ function TableSkeleton() {
 export default function AnalyticsPage() {
   const router = useRouter()
   const { user } = useUser()
-  const [accounts, setAccounts] = useState<TrackedAccount[]>([])
+  const [accounts, setAccounts] = useState<AccountWithTotals[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [platform, setPlatform] = useState<Platform | "all">("all")
-  const [sort, setSort] = useState("total_views")
+  const [sortKey, setSortKey] = useState<SortKey>("total_views")
+  const [sortAsc, setSortAsc] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const load = useCallback(async (userId?: string) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchTrackedAccounts(userId)
+      const data = await fetchAccountsWithTotals(userId)
       setAccounts(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load accounts.")
@@ -103,12 +105,65 @@ export default function AnalyticsPage() {
       return matchSearch && matchPlatform
     })
     .sort((a, b) => {
-      if (sort === "total_views") return (b.total_views ?? 0) - (a.total_views ?? 0)
-      if (sort === "followers") return b.follower_count - a.follower_count
-      if (sort === "engagement") return b.engagement_rate - a.engagement_rate
-      if (sort === "avg_views") return (b.avg_views ?? 0) - (a.avg_views ?? 0)
-      return 0
+      let av: number | string = 0
+      let bv: number | string = 0
+      if (sortKey === "username") {
+        av = a.username
+        bv = b.username
+        return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+      }
+      if (sortKey === "last_synced_at") {
+        av = a.last_synced_at ? new Date(a.last_synced_at).getTime() : 0
+        bv = b.last_synced_at ? new Date(b.last_synced_at).getTime() : 0
+      } else if (sortKey === "video_count") {
+        av = a.video_count
+        bv = b.video_count
+      } else if (sortKey === "total_likes") {
+        av = a.total_likes
+        bv = b.total_likes
+      } else if (sortKey === "total_comments") {
+        av = a.total_comments
+        bv = b.total_comments
+      } else if (sortKey === "total_shares") {
+        av = a.total_shares
+        bv = b.total_shares
+      } else if (sortKey === "followers") {
+        av = a.follower_count
+        bv = b.follower_count
+      } else if (sortKey === "engagement_rate") {
+        av = a.engagement_rate
+        bv = b.engagement_rate
+      } else if (sortKey === "avg_views") {
+        av = a.avg_views ?? 0
+        bv = b.avg_views ?? 0
+      } else {
+        av = a.total_views ?? 0
+        bv = b.total_views ?? 0
+      }
+      return sortAsc ? Number(av) - Number(bv) : Number(bv) - Number(av)
     })
+
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize)
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortAsc(!sortAsc)
+    else { setSortKey(key); setSortAsc(false) }
+  }
+
+  const csvRows = [
+    ["Username", "Platform", "Followers", "Views", "Videos", "Likes", "Comments", "Shares", "Engagement"],
+    ...filtered.map((a) => [
+      a.username,
+      a.platform,
+      String(a.follower_count),
+      String(a.total_views ?? 0),
+      String(a.video_count),
+      String(a.total_likes),
+      String(a.total_comments),
+      a.platform === "instagram" ? "N/A" : String(a.total_shares),
+      `${a.engagement_rate}%`,
+    ]),
+  ]
 
   const stats = {
     totalAccounts: accounts.length,
@@ -140,7 +195,15 @@ export default function AnalyticsPage() {
   }
 
   function handleAccountAdded(account: TrackedAccount) {
-    setAccounts((prev) => [account, ...prev])
+    setAccounts((prev) => [{
+      ...account,
+      video_count: 0,
+      total_likes: 0,
+      total_comments: 0,
+      total_shares: 0,
+      creator_name: null,
+      postsByDay: new Map(),
+    }, ...prev])
   }
 
   const statCards = [
@@ -153,11 +216,11 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-5 max-w-7xl">
       <CmdKSearch />
-      {/* Header */}
+      <AnalyticsBreadcrumb section="Accounts" />
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[22px] font-semibold text-white tracking-tight">Analytics</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Track performance across all your creator accounts.</p>
+          <h1 className="text-[22px] font-semibold text-white tracking-tight">Accounts</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">View and analyze performance metrics across your tracked accounts.</p>
         </div>
         <button
           onClick={() => setDrawerOpen(true)}
@@ -216,18 +279,7 @@ export default function AnalyticsPage() {
             </button>
           ))}
         </div>
-        <div className="relative ml-auto">
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="appearance-none pl-3 pr-8 py-2 rounded-lg bg-[#111111] border border-white/[0.06] text-sm text-zinc-300 outline-none focus:border-purple-500/40 transition-colors cursor-pointer"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value} className="bg-[#1a1a1a]">Sort: {o.label}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" />
-        </div>
+        <ExportCsvButton rows={csvRows} filename="trackhive-accounts.csv" />
       </div>
 
       {/* Loading state */}
@@ -282,17 +334,36 @@ export default function AnalyticsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/[0.04]">
-                  <th className="text-left px-5 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Account</th>
-                  <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Followers</th>
-                  <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Total Views</th>
-                  <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Avg Views</th>
-                  <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Engagement</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Last Synced</th>
+                  {([
+                    { key: "username" as SortKey, label: "Account", align: "left", icon: undefined },
+                    { key: null, label: "Creator", align: "left" },
+                    { key: null, label: "Post Activity", align: "left" },
+                    { key: "video_count" as SortKey, label: "Videos", icon: Video },
+                    { key: "followers" as SortKey, label: "Followers", icon: Users },
+                    { key: "total_views" as SortKey, label: "Views", icon: Eye },
+                    { key: "total_likes" as SortKey, label: "Likes", icon: Heart },
+                    { key: "total_comments" as SortKey, label: "Comments", icon: MessageCircle },
+                    { key: "total_shares" as SortKey, label: "Shares", icon: Share2 },
+                    { key: "engagement_rate" as SortKey, label: "Engagement", align: "right" },
+                    { key: "last_synced_at" as SortKey, label: "Last Synced", align: "left" },
+                  ]).map((col, i) => {
+                    const Icon = col.icon
+                    return (
+                      <th
+                        key={i}
+                        title={col.label}
+                        className={`${col.align === "left" ? "text-left" : "text-right"} px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider ${col.key ? "cursor-pointer hover:text-zinc-300" : ""}`}
+                        onClick={() => col.key && toggleSort(col.key)}
+                      >
+                        {Icon ? <Icon className="w-3.5 h-3.5 inline" /> : col.label}
+                      </th>
+                    )
+                  })}
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.03]">
-                {filtered.map((account) => {
+                {paged.map((account) => {
                   const cfg = PLATFORM_CONFIG[account.platform]
                   return (
                     <tr
@@ -325,6 +396,16 @@ export default function AnalyticsPage() {
                           </div>
                         </div>
                       </td>
+                      <td className="px-4 py-3.5">
+                        <span className="text-xs text-zinc-500">{account.creator_name ?? "None"}</span>
+                        <button className="ml-1 text-zinc-600 hover:text-purple-400 text-xs" onClick={(e) => e.stopPropagation()}>+</button>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <PostActivitySparkline postsByDay={account.postsByDay} />
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <span className="text-sm text-zinc-300">{account.video_count}</span>
+                      </td>
                       <td className="px-4 py-3.5 text-right">
                         <span className="text-sm text-zinc-300">{formatNumber(account.follower_count)}</span>
                       </td>
@@ -332,7 +413,13 @@ export default function AnalyticsPage() {
                         <span className="text-sm font-medium text-zinc-200">{formatNumber(account.total_views ?? 0)}</span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <span className="text-sm text-zinc-300">{formatNumber(account.avg_views ?? 0)}</span>
+                        <span className="text-sm text-zinc-300">{formatNumber(account.total_likes)}</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <span className="text-sm text-zinc-300">{formatNumber(account.total_comments)}</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <span className="text-sm text-zinc-400">{account.platform === "instagram" ? "N/A" : formatNumber(account.total_shares)}</span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <span className={`text-sm font-medium ${account.engagement_rate >= 5 ? "text-emerald-400" : account.engagement_rate >= 3 ? "text-zinc-300" : "text-amber-400"}`}>
@@ -377,13 +464,7 @@ export default function AnalyticsPage() {
               </tbody>
             </table>
           </div>
-          <div className="px-5 py-3 border-t border-white/[0.04] flex items-center justify-between">
-            <p className="text-xs text-zinc-600">{filtered.length} account{filtered.length !== 1 ? "s" : ""}</p>
-            <button onClick={() => load(user?.id)} className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
-              <RefreshCw className="w-3 h-3" />
-              Refresh
-            </button>
-          </div>
+          <TablePagination page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} onPageSizeChange={setPageSize} />
         </div>
       )}
 

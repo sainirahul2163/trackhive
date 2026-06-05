@@ -1,21 +1,22 @@
 "use client"
 
-import { useState } from "react"
-import { X, ExternalLink, Copy, Bookmark, Plus, Check, Flame, TrendingUp, Minus } from "lucide-react"
+import { useState, useEffect } from "react"
+import Link from "next/link"
 import {
-  AreaChart,
-  Area,
-  Tooltip,
-  ResponsiveContainer,
+  X, Maximize2, Info, Flame, TrendingUp, Minus,
+  Play, Heart, MessageCircle, Share2, Bookmark, Clock, Disc3, Calendar,
+} from "lucide-react"
+import {
+  ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+import { format } from "date-fns"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/lib/platform"
-import type { TrackedVideo } from "@/types"
+import {
+  fetchVideoDailyStats, fetchVideoById, extractHashtags, formatDuration,
+} from "@/lib/analytics-queries"
+import type { TrackedVideo, VideoDailyStat } from "@/types"
 
 interface VideoDetailDrawerProps {
   video: TrackedVideo | null
@@ -23,268 +24,199 @@ interface VideoDetailDrawerProps {
   onOpenChange: (open: boolean) => void
 }
 
-function generateSparkline(baseViews: number, days = 14) {
-  return Array.from({ length: days }, (_, i) => ({
-    day: `Day ${i + 1}`,
-    views: Math.floor(
-      baseViews * (0.05 + Math.random() * 0.15) * Math.exp(-i * 0.08) + Math.random() * 10000
-    ),
-  }))
+interface MetricCardProps {
+  icon: React.ElementType
+  label: string
+  value: string
+  tooltip: string
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  })
-}
-
-interface SparkTooltipProps {
-  active?: boolean
-  payload?: Array<{ value: number }>
-  label?: string
-}
-
-const SparkTooltip = ({ active, payload, label }: SparkTooltipProps) => {
-  if (active && payload?.length) {
-    return (
-      <div className="bg-[#1a1a1a] border border-white/10 rounded px-2 py-1">
-        <p className="text-[10px] text-zinc-500">{label}</p>
-        <p className="text-xs font-semibold text-purple-400">
-          {Number(payload[0]?.value).toLocaleString()}
-        </p>
+function MetricCard({ icon: Icon, label, value, tooltip }: MetricCardProps) {
+  return (
+    <div className="rounded-lg bg-white/[0.03] border border-white/[0.05] p-3">
+      <div className="flex items-center gap-1.5 text-zinc-500 mb-1">
+        <Icon className="w-3.5 h-3.5" />
+        <span className="text-[10px] font-medium uppercase tracking-wide">{label}</span>
+        <span title={tooltip}><Info className="w-2.5 h-2.5 cursor-help" /></span>
       </div>
-    )
-  }
-  return null
+      <p className="text-lg font-bold text-white">{value}</p>
+    </div>
+  )
 }
-
-const TAG_COLORS = [
-  "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  "bg-pink-500/10 text-pink-400 border-pink-500/20",
-  "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-]
 
 export function VideoDetailDrawer({ video, open, onOpenChange }: VideoDetailDrawerProps) {
-  const [tags, setTags] = useState<string[]>([])
-  const [addingTag, setAddingTag] = useState(false)
-  const [newTag, setNewTag] = useState("")
-  const [copied, setCopied] = useState(false)
+  const [dailyStats, setDailyStats] = useState<VideoDailyStat[]>([])
+  const [accountInfo, setAccountInfo] = useState<{ username: string; display_name: string | null; avatar_url: string | null } | null>(null)
+  const [loadingStats, setLoadingStats] = useState(false)
+  const [showViews, setShowViews] = useState(true)
+  const [showLikes, setShowLikes] = useState(true)
+  const [showComments, setShowComments] = useState(true)
 
-  const sparkData = video ? generateSparkline(video.views ?? 0) : []
-  const vl = video ? viralityLabel(video.virality_score) : null
-  const cfg = video ? PLATFORM_CONFIG[video.platform] : null
-  const allTags = [...(video?.tags ?? []), ...tags]
+  useEffect(() => {
+    if (!video?.id || !open) return
+    setLoadingStats(true)
+    Promise.all([
+      fetchVideoDailyStats(video.id),
+      fetchVideoById(video.id),
+    ]).then(([stats, full]) => {
+      setDailyStats(stats)
+      if (full?.account) {
+        setAccountInfo({
+          username: full.account.username,
+          display_name: full.account.display_name,
+          avatar_url: full.account.avatar_url,
+        })
+      }
+    }).finally(() => setLoadingStats(false))
+  }, [video?.id, open])
 
-  function handleCopyUrl() {
-    if (!video) return
-    navigator.clipboard.writeText(video.video_url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  if (!video) return null
 
-  function handleAddTag() {
-    const trimmed = newTag.trim().toLowerCase()
-    if (trimmed && !allTags.includes(trimmed)) {
-      setTags((prev) => [...prev, trimmed])
-    }
-    setNewTag("")
-    setAddingTag(false)
-  }
+  const cfg = PLATFORM_CONFIG[video.platform]
+  const vl = viralityLabel(video.virality_score)
+  const hashtags = extractHashtags(video.caption)
+  const chartData = dailyStats.map((d) => ({
+    date: format(new Date(d.date), "MMM d"),
+    views: d.views,
+    likes: d.likes,
+    comments: d.comments,
+  }))
 
-  if (!video || !cfg || !vl) return null
-
-  const stats = [
-    { label: "Views", value: formatNumber(video.views), color: "text-blue-400" },
-    { label: "Likes", value: formatNumber(video.likes), color: "text-pink-400" },
-    { label: "Comments", value: formatNumber(video.comments), color: "text-amber-400" },
-    { label: "Shares", value: formatNumber(video.shares), color: "text-emerald-400" },
-    { label: "Saves", value: formatNumber(video.saves), color: "text-purple-400" },
-    { label: "Eng. Rate", value: `${video.engagement_rate.toFixed(1)}%`, color: "text-cyan-400" },
-  ]
-
-  const ViralityIcon =
-    video.virality_score >= 7.5 ? Flame : video.virality_score >= 4.5 ? TrendingUp : Minus
+  const ViralityIcon = video.virality_score >= 7.5 ? Flame : video.virality_score >= 4.5 ? TrendingUp : Minus
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="w-full sm:max-w-[500px] bg-[#111111] border-l border-white/[0.08] p-0 flex flex-col gap-0"
+        className="w-full sm:max-w-[560px] bg-[#111111] border-l border-white/[0.08] p-0 flex flex-col gap-0"
       >
-        {/* Header */}
-        <SheetHeader className="px-5 pt-5 pb-4 border-b border-white/[0.06] flex-shrink-0">
-          <div className="flex items-center justify-between">
+        <SheetHeader className="px-5 pt-4 pb-3 border-b border-white/[0.06] flex-shrink-0">
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium ${cfg.bg} ${cfg.textColor}`}>
-                <PlatformIcon platform={video.platform} className="w-3 h-3" />
-                {cfg.label}
-              </span>
-              <span className="text-xs text-zinc-500">{formatDate(video.posted_at)}</span>
+              <Link
+                href={`/analytics/videos/${video.id}`}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-zinc-400 border border-white/[0.08] hover:text-white"
+              >
+                <Maximize2 className="w-3.5 h-3.5" /> Full Page
+              </Link>
+              <a
+                href={video.video_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-zinc-400 border border-white/[0.08] hover:text-white"
+              >
+                <PlatformIcon platform={video.platform} className="w-3.5 h-3.5" />
+                {cfg.label} ↗
+              </a>
             </div>
-            <button
-              onClick={() => onOpenChange(false)}
-              className="w-7 h-7 rounded-md flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
-            >
+            <button onClick={() => onOpenChange(false)} className="w-7 h-7 rounded-md flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06]">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <SheetTitle className="text-sm font-medium text-zinc-200 leading-snug pt-1 pr-2">
-            {video.caption}
+          <SheetTitle className="text-sm font-medium text-zinc-200 leading-snug pt-2 pr-2 text-left">
+            {video.caption ?? "Untitled video"}
           </SheetTitle>
+          <p className="text-xs text-zinc-500 text-left">{cfg.label} video by @{accountInfo?.username ?? "unknown"}</p>
+          {hashtags.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-2">
+              {hashtags.map((tag) => (
+                <span key={tag} className="px-2 py-0.5 rounded-full text-[10px] bg-white/[0.06] text-zinc-400 border border-white/[0.06]">{tag}</span>
+              ))}
+            </div>
+          )}
+          {video.posted_at && (
+            <div className="flex items-center gap-1.5 text-xs text-zinc-500 pt-1">
+              <Calendar className="w-3.5 h-3.5" />
+              {format(new Date(video.posted_at), "MMM d, yyyy, h:mm a")}
+            </div>
+          )}
         </SheetHeader>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Thumbnail */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {video.thumbnail_url && (
-            <div className="px-5 pt-5">
-              <div className="rounded-xl overflow-hidden bg-white/[0.03] border border-white/[0.06] aspect-video">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={video.thumbnail_url}
-                  alt={video.caption ?? ""}
-                  className="w-full h-full object-cover"
-                />
+            <div className="rounded-xl overflow-hidden border border-white/[0.06] aspect-video bg-white/[0.03]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <MetricCard icon={Play} label="Views" value={formatNumber(video.views)} tooltip="Total view count" />
+            <MetricCard icon={Heart} label="Likes" value={formatNumber(video.likes)} tooltip="Total likes" />
+            <MetricCard icon={MessageCircle} label="Comments" value={formatNumber(video.comments)} tooltip="Total comments" />
+            <MetricCard icon={TrendingUp} label="Engagement" value={`${video.engagement_rate.toFixed(2)}%`} tooltip="(likes + comments) / views" />
+            <MetricCard icon={Share2} label="Shares" value={video.platform === "instagram" ? "N/A" : formatNumber(video.shares)} tooltip="Total shares" />
+            <MetricCard icon={Bookmark} label="Bookmarks" value={formatNumber(video.saves)} tooltip="Total bookmarks/saves" />
+            <MetricCard icon={Flame} label="Virality" value={video.virality_score.toFixed(2)} tooltip="Virality score 0-10" />
+            <MetricCard icon={Clock} label="Duration" value={formatDuration(video.duration_seconds)} tooltip="Video length" />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Metrics</p>
+              <div className="flex gap-1 flex-wrap">
+                {showViews && <button onClick={() => setShowViews(false)} className="px-2 py-0.5 rounded-full text-[10px] bg-orange-500/15 text-orange-400 border border-orange-500/25">Views ×</button>}
+                {showLikes && <button onClick={() => setShowLikes(false)} className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/15 text-blue-400 border border-blue-500/25">Likes ×</button>}
+                {showComments && <button onClick={() => setShowComments(false)} className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/25">Comments ×</button>}
+                <button className="px-2 py-0.5 rounded-full text-[10px] text-zinc-500 border border-white/[0.08]">+ Add</button>
+              </div>
+            </div>
+            {loadingStats ? (
+              <p className="text-xs text-zinc-500 py-8 text-center">Loading chart…</p>
+            ) : chartData.length === 0 ? (
+              <p className="text-xs text-zinc-500 py-8 text-center border border-dashed border-white/[0.08] rounded-xl">Syncing data… Daily stats will appear after the next sync.</p>
+            ) : (
+              <div className="rounded-xl bg-white/[0.02] border border-white/[0.05] p-2">
+                <ResponsiveContainer width="100%" height={180}>
+                  <ComposedChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis dataKey="date" tick={{ fill: "#71717a", fontSize: 10 }} />
+                    {showViews && <YAxis yAxisId="left" tick={{ fill: "#71717a", fontSize: 10 }} />}
+                    {(showLikes || showComments) && <YAxis yAxisId="right" orientation="right" tick={{ fill: "#71717a", fontSize: 10 }} />}
+                    <Tooltip contentStyle={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} />
+                    {showViews && <Area yAxisId="left" type="monotone" dataKey="views" fill="#f97316" fillOpacity={0.15} stroke="#f97316" strokeWidth={2} />}
+                    {showLikes && <Bar yAxisId="right" dataKey="likes" fill="#3b82f6" barSize={8} radius={[2, 2, 0, 0]} />}
+                    {showComments && <Bar yAxisId="right" dataKey="comments" fill="#eab308" barSize={8} radius={[2, 2, 0, 0]} />}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {accountInfo && (
+            <div>
+              <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-2">Account</p>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+                <Avatar className="w-9 h-9">
+                  <AvatarImage src={accountInfo.avatar_url ?? undefined} />
+                  <AvatarFallback>{accountInfo.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-sm font-medium text-white">@{accountInfo.username}</p>
+                  <p className="text-xs text-zinc-500">{accountInfo.display_name}</p>
+                </div>
               </div>
             </div>
           )}
 
-          <div className="px-5 py-5 space-y-5">
-            {/* Virality Score */}
-            <div className={`flex items-center gap-3 p-4 rounded-xl border ${vl.className}`}>
-              <div className="w-10 h-10 rounded-xl bg-white/[0.05] flex items-center justify-center">
-                <ViralityIcon className="w-5 h-5" />
-              </div>
+          <div>
+            <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-2">Music</p>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+              <Disc3 className="w-5 h-5 text-zinc-500" />
               <div>
-                <p className="text-sm font-semibold">
-                  Virality Score: {video.virality_score.toFixed(1)} / 10
-                </p>
-                <p className="text-xs opacity-75">
-                  {vl.label === "Hot"
-                    ? "This video is going viral 🔥"
-                    : vl.label === "Rising"
-                    ? "Gaining traction — worth boosting"
-                    : "Steady performance — monitor trends"}
-                </p>
-              </div>
-              <span className={`ml-auto text-lg font-bold`}>{vl.label}</span>
-            </div>
-
-            {/* Stats grid */}
-            <div>
-              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Performance</p>
-              <div className="grid grid-cols-3 gap-2">
-                {stats.map((s) => (
-                  <div
-                    key={s.label}
-                    className="rounded-lg bg-white/[0.03] border border-white/[0.05] p-3 text-center"
-                  >
-                    <p className={`text-base font-bold ${s.color}`}>{s.value}</p>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">{s.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Sparkline */}
-            <div>
-              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">
-                Views — Last 14 Days
-              </p>
-              <div className="rounded-xl bg-white/[0.02] border border-white/[0.05] px-3 pt-3 pb-1">
-                <ResponsiveContainer width="100%" height={80}>
-                  <AreaChart data={sparkData} margin={{ top: 2, right: 2, left: -30, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Tooltip content={<SparkTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="views"
-                      stroke="#7C3AED"
-                      strokeWidth={1.5}
-                      fill="url(#sparkGrad)"
-                      dot={false}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* AI Tags */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Tags</p>
-                <button
-                  onClick={() => setAddingTag(true)}
-                  className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                  Add tag
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {allTags.map((tag, i) => (
-                  <span
-                    key={tag}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
-                      TAG_COLORS[i % TAG_COLORS.length]
-                    }`}
-                  >
-                    {tag}
-                  </span>
-                ))}
-                {addingTag && (
-                  <input
-                    autoFocus
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddTag()
-                      if (e.key === "Escape") { setAddingTag(false); setNewTag("") }
-                    }}
-                    onBlur={handleAddTag}
-                    placeholder="type + enter"
-                    className="px-2.5 py-1 rounded-full text-xs bg-white/[0.05] border border-purple-500/30 text-zinc-200 placeholder:text-zinc-600 outline-none w-28"
-                  />
-                )}
+                <p className="text-sm text-white">{video.audio_name ?? "Original Sound"}</p>
+                <p className="text-xs text-zinc-500">{video.audio_name ? "Track" : "Platform audio"}</p>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Action buttons */}
-        <div className="px-5 py-4 border-t border-white/[0.06] flex gap-2 flex-shrink-0">
-          <a
-            href={video.video_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-zinc-300 hover:text-white hover:border-white/10 text-sm font-medium transition-all"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Open on {cfg.label}
-          </a>
-          <button
-            onClick={handleCopyUrl}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-zinc-300 hover:text-white hover:border-white/10 text-sm font-medium transition-all"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? "Copied!" : "Copy URL"}
-          </button>
-          <button className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-all active:scale-[0.98]">
-            <Bookmark className="w-3.5 h-3.5" />
-            Save
-          </button>
+          <div className={`flex items-center gap-3 p-3 rounded-xl border ${vl.className}`}>
+            <ViralityIcon className="w-5 h-5" />
+            <div>
+              <p className="text-sm font-semibold">Virality: {video.virality_score.toFixed(1)}/10 — {vl.label}</p>
+            </div>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
