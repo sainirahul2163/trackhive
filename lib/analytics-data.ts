@@ -39,6 +39,34 @@ export async function fetchTrackedVideos(accountId: string): Promise<TrackedVide
   return data as TrackedVideo[]
 }
 
+export interface AccountVideoAggregates {
+  total_views:    number
+  total_likes:    number
+  total_comments: number
+}
+
+/** SUM(views), SUM(likes), SUM(comments) for all videos on an account. */
+export async function fetchAccountVideoAggregates(
+  accountId: string,
+): Promise<AccountVideoAggregates> {
+  const { data, error } = await supabase
+    .from("tracked_videos")
+    .select("views, likes, comments")
+    .eq("account_id", accountId)
+
+  if (error) throw new Error(error.message)
+
+  const rows = data ?? []
+  return rows.reduce<AccountVideoAggregates>(
+    (acc, row) => ({
+      total_views:    acc.total_views    + Number(row.views    ?? 0),
+      total_likes:    acc.total_likes    + Number(row.likes    ?? 0),
+      total_comments: acc.total_comments + Number(row.comments ?? 0),
+    }),
+    { total_views: 0, total_likes: 0, total_comments: 0 },
+  )
+}
+
 export interface DailyViewsPoint {
   date:     string
   views:    number

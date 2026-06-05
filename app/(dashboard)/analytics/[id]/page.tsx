@@ -18,9 +18,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/lib/platform"
 import { VideoDetailDrawer } from "@/components/analytics/video-detail-drawer"
-import { fetchTrackedAccount, fetchTrackedVideos, fetchDailyStats, type DailyViewsPoint } from "@/lib/analytics-data"
+import {
+  fetchTrackedAccount,
+  fetchTrackedVideos,
+  fetchDailyStats,
+  fetchAccountVideoAggregates,
+  type DailyViewsPoint,
+  type AccountVideoAggregates,
+} from "@/lib/analytics-data"
 import { fetchCampaigns } from "@/lib/campaigns-data"
-import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/use-user"
 import type { TrackedAccount, TrackedVideo, Campaign, Platform } from "@/types"
 
@@ -246,8 +252,9 @@ export default function AccountDetailPage() {
   const [account,       setAccount]       = useState<TrackedAccount | null>(null)
   const [videos,        setVideos]        = useState<TrackedVideo[]>([])
   const [dailyStats,    setDailyStats]    = useState<DailyViewsPoint[]>([])
-  const [totalLikes,    setTotalLikes]    = useState(0)
-  const [totalComments, setTotalComments] = useState(0)
+  const [videoAggregates, setVideoAggregates] = useState<AccountVideoAggregates>({
+    total_views: 0, total_likes: 0, total_comments: 0,
+  })
   const [loading,    setLoading]    = useState(true)
   const [syncing,    setSyncing]    = useState(false)
   const [error,      setError]      = useState<string | null>(null)
@@ -262,25 +269,46 @@ export default function AccountDetailPage() {
     setLoading(true)
     setError(null)
     try {
-      const [acct, vids, daily, statsRes] = await Promise.all([
+      const [acct, vids, daily, aggregates] = await Promise.all([
         fetchTrackedAccount(id),
         fetchTrackedVideos(id),
         fetchDailyStats(id, 90),
-        supabase.from("tracked_videos").select("likes, comments").eq("account_id", id),
+        fetchAccountVideoAggregates(id),
       ])
-      const statsData = statsRes.data ?? []
+
+      console.log("[account detail] accountId:", id)
+      console.log("[account detail] account total_views:", acct.total_views, "avg_views:", acct.avg_views)
+      console.log("[account detail] video aggregates:", JSON.stringify(aggregates))
+      console.log("[account detail] videos loaded:", vids.length)
+
+      // Fallback per field: sum from loaded videos if aggregate query returned 0
+      const sumFromVideos = vids.reduce<AccountVideoAggregates>(
+        (acc, v) => ({
+          total_views:    acc.total_views    + Number(v.views    ?? 0),
+          total_likes:    acc.total_likes    + Number(v.likes    ?? 0),
+          total_comments: acc.total_comments + Number(v.comments ?? 0),
+        }),
+        { total_views: 0, total_likes: 0, total_comments: 0 },
+      )
+      const resolvedAggregates: AccountVideoAggregates = {
+        total_views:    aggregates.total_views    || sumFromVideos.total_views,
+        total_likes:    aggregates.total_likes    || sumFromVideos.total_likes,
+        total_comments: aggregates.total_comments || sumFromVideos.total_comments,
+      }
+
+      console.log("[account detail] resolved sums — views:", resolvedAggregates.total_views,
+        "likes:", resolvedAggregates.total_likes, "comments:", resolvedAggregates.total_comments)
+
       setAccount(acct)
       setVideos(vids)
       setDailyStats(daily)
-      setTotalLikes(statsData.reduce((sum, v) => sum + (v.likes ?? 0), 0))
-      setTotalComments(statsData.reduce((sum, v) => sum + (v.comments ?? 0), 0))
+      setVideoAggregates(resolvedAggregates)
     } catch {
       setError("Failed to load account")
       setAccount(null)
       setVideos([])
       setDailyStats([])
-      setTotalLikes(0)
-      setTotalComments(0)
+      setVideoAggregates({ total_views: 0, total_likes: 0, total_comments: 0 })
     } finally {
       setLoading(false)
     }
@@ -346,15 +374,18 @@ export default function AccountDetailPage() {
   if (!account) return null
   const cfg = PLATFORM_CONFIG[account.platform]
 
+  const accountTotalViews = Number(account.total_views ?? 0)
+  const displayTotalViews = accountTotalViews > 0 ? accountTotalViews : videoAggregates.total_views
+
   const statCards = [
-    { label: "Total Views",       value: formatStatNumber(account.total_views ?? 0),  icon: PlayCircle,    color: "text-blue-400",    bg: "bg-blue-500/10"    },
-    { label: "Avg Views / Video", value: formatStatNumber(account.avg_views ?? 0),    icon: BarChart2,     color: "text-purple-400",  bg: "bg-purple-500/10"  },
-    { label: "Engagement Rate",   value: `${account.engagement_rate.toFixed(1)}%`,    icon: Activity,      color: "text-emerald-400", bg: "bg-emerald-500/10" },
-    { label: "Total Likes",       value: formatStatNumber(totalLikes),                icon: Heart,         color: "text-pink-400",    bg: "bg-pink-500/10"    },
-    { label: "Total Comments",    value: formatStatNumber(totalComments),             icon: MessageCircle, color: "text-blue-400",    bg: "bg-blue-500/10"    },
+    { label: "Total Views",       value: formatStatNumber(displayTotalViews),              icon: PlayCircle,    color: "text-blue-400",    bg: "bg-blue-500/10"    },
+    { label: "Avg Views / Video", value: formatStatNumber(Number(account.avg_views ?? 0)), icon: BarChart2,     color: "text-purple-400",  bg: "bg-purple-500/10"  },
+    { label: "Engagement Rate",   value: `${Number(account.engagement_rate ?? 0).toFixed(1)}%`, icon: Activity, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    { label: "Total Likes",       value: formatStatNumber(videoAggregates.total_likes),    icon: Heart,         color: "text-pink-400",    bg: "bg-pink-500/10"    },
+    { label: "Total Comments",    value: formatStatNumber(videoAggregates.total_comments), icon: MessageCircle, color: "text-blue-400",    bg: "bg-blue-500/10"    },
     {
       label: "Est. CPM",
-      value: calcEstCpmValue(account.platform, account.total_views ?? 0),
+      value: calcEstCpmValue(account.platform, displayTotalViews),
       icon: DollarSign,
       color: "text-amber-400",
       bg: "bg-amber-500/10",
