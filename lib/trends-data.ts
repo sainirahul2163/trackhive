@@ -17,7 +17,7 @@ export async function fetchBoards(userId?: string): Promise<InspirationBoard[]> 
     .order("created_at", { ascending: true })
 
   if (userId) {
-    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+    query = query.eq("workspace_id", userId)
   }
 
   const { data, error } = await query

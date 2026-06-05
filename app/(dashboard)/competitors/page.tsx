@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import {
   Plus, Globe, Eye, Users, TrendingUp, BarChart2,
   Star, StarOff, ChevronRight, AlertCircle,
@@ -14,7 +14,9 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
-import { fetchCompetitors } from "@/lib/competitors-data"
+import {
+  fetchCompetitors, fetchCompetitorVideos, fetchCompetitorCreators, fetchAiReports,
+} from "@/lib/competitors-data"
 import { AddCompetitorDrawer } from "@/components/competitors/add-competitor-drawer"
 import { useUser } from "@/lib/use-user"
 import type {
@@ -22,100 +24,6 @@ import type {
   CompetitorCreator, AiReport, Platform,
 } from "@/types"
 import { cn } from "@/lib/utils"
-
-// (mock competitors removed — real data fetched from Supabase)
-
-function makeThumbs(seeds: string[]) {
-  return seeds.map(s => `https://picsum.photos/seed/${s}/200/120`)
-}
-const THUMBS = makeThumbs(["comp1","comp2","comp3","comp4","comp5","comp6","comp7","comp8"])
-
-function buildVideos(competitorAccountId: string, platform: Platform): CompetitorVideo[] {
-  return Array.from({ length: 6 }, (_, i) => ({
-    id: `${competitorAccountId}-v${i}`,
-    competitor_account_id: competitorAccountId,
-    platform,
-    video_url: null,
-    thumbnail_url: THUMBS[i % THUMBS.length],
-    caption: [
-      "Why our customers are switching to us in droves 🚀",
-      "The formula no one is talking about (until now)",
-      "I tested 10 brands — here's the honest winner",
-      "Watch this if you're tired of mediocre results",
-      "Behind the scenes of our biggest campaign yet",
-      "This format drove 2M views in 48 hours — here's why",
-    ][i],
-    views: [2100000, 880000, 1540000, 670000, 3200000, 950000][i],
-    likes: [180000, 72000, 120000, 54000, 290000, 78000][i],
-    engagement_rate: [8.6, 8.2, 7.8, 8.1, 9.1, 8.2][i],
-    content_format: (["hook_first","testimonial","before_after","lifestyle","storytime","product_demo"] as const)[i],
-    posted_at: new Date(Date.now() - i * 86400000 * 3).toISOString(),
-    created_at: "",
-  }))
-}
-
-function buildCreators(competitorId: string): CompetitorCreator[] {
-  return [
-    { id: `${competitorId}-cr1`, competitor_id: competitorId, account_id: null, creator_handle: "@mikecreates",  platform: "tiktok",    avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=mike",   follower_count: 890000,  avg_views: 680000, videos_posted: 8,  status: "active",   flagged_outreach: false, first_seen_at: "", last_seen_at: new Date(Date.now()-86400000).toISOString() },
-    { id: `${competitorId}-cr2`, competitor_id: competitorId, account_id: null, creator_handle: "@sarahlifts",   platform: "instagram", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=sarah",  follower_count: 540000,  avg_views: 310000, videos_posted: 5,  status: "active",   flagged_outreach: true,  first_seen_at: "", last_seen_at: new Date(Date.now()-172800000).toISOString() },
-    { id: `${competitorId}-cr3`, competitor_id: competitorId, account_id: null, creator_handle: "@techwithtom",  platform: "youtube",   avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=tom",   follower_count: 280000,  avg_views: 190000, videos_posted: 3,  status: "inactive", flagged_outreach: false, first_seen_at: "", last_seen_at: new Date(Date.now()-2592000000).toISOString() },
-    { id: `${competitorId}-cr4`, competitor_id: competitorId, account_id: null, creator_handle: "@fitnessfiona", platform: "tiktok",    avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=fiona", follower_count: 1100000, avg_views: 940000, videos_posted: 12, status: "active",   flagged_outreach: false, first_seen_at: "", last_seen_at: new Date(Date.now()-3600000).toISOString() },
-  ]
-}
-
-function buildReports(competitorId: string): AiReport[] {
-  return [
-    {
-      id: `${competitorId}-r1`, workspace_id: null, competitor_id: competitorId,
-      week_of: new Date(Date.now()-604800000).toISOString().slice(0,10),
-      summary: "This week the competitor ramped up TikTok output by 40%, focusing heavily on hook-first formats that open with a surprising stat. Their top video hit 3.2M views in 48 hours — driven by a relatable pain-point hook, tight 38-second runtime, and trending audio. Creator strategy shifted toward micro-influencers (100K–500K) suggesting a CPM optimization play. Instagram lagged behind with lower engagement on product-demo formats.",
-      top_videos: [
-        { url: "#", views: 3200000, caption: "This format drove 2M views in 48 hours — here's why" },
-        { url: "#", views: 2100000, caption: "Why our customers are switching to us in droves 🚀" },
-      ],
-      recommendations: [
-        "Adopt hook-first format immediately — competitor is winning 40% more watch time with this structure",
-        "Target their inactive creators (@techwithtom) for outreach before competitor re-engages them",
-        "Increase TikTok posting frequency to 4+ videos/week to match their volume",
-        "Test 35–45s video length; competitor data suggests it outperforms 60s+ by 2× in completion rate",
-      ],
-      created_at: "",
-    },
-    {
-      id: `${competitorId}-r2`, workspace_id: null, competitor_id: competitorId,
-      week_of: new Date(Date.now()-1209600000).toISOString().slice(0,10),
-      summary: "Competitor launched a coordinated multi-platform push with consistent messaging across TikTok and Instagram. Their testimonial-style content on Instagram outperformed industry benchmarks by 2.3×. Notable: they onboarded 3 new creators with 500K–1M follower range — likely ahead of a product launch.",
-      top_videos: [
-        { url: "#", views: 1540000, caption: "I tested 10 brands — here's the honest winner" },
-      ],
-      recommendations: [
-        "Monitor their creator onboarding pattern — a product launch is likely in the next 2–3 weeks",
-        "Counter with your own testimonial push on Instagram to compete in that format",
-        "Engage your existing creators for exclusivity agreements before competitor poaches them",
-      ],
-      created_at: "",
-    },
-  ]
-}
-
-function buildWeeklyData() {
-  return Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (11 - i) * 7)
-    return {
-      week: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      competitor: Math.floor(Math.random() * 4000000 + 1000000),
-      yours: Math.floor(Math.random() * 3000000 + 800000),
-    }
-  })
-}
-
-const FORMAT_PIE = [
-  { name: "Hook-First",   value: 38, color: "#7C3AED" },
-  { name: "Testimonial",  value: 24, color: "#3b82f6" },
-  { name: "Before/After", value: 18, color: "#10b981" },
-  { name: "Lifestyle",    value: 12, color: "#f59e0b" },
-  { name: "Other",        value: 8,  color: "#6b7280" },
-]
 
 // ── Helpers ───────────────────────────────────────────────────
 const TABS = ["Overview", "Videos", "Creators", "vs. You", "AI Reports"] as const
@@ -156,7 +64,7 @@ export default function CompetitorsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>("Overview")
   const [showAddDrawer, setShowAddDrawer] = useState(false)
-  const [weeklyData] = useState(buildWeeklyData)
+  const weeklyData: { week: string; competitor: number; yours: number }[] = []
   const [expandedReport, setExpandedReport] = useState<string | null>(null)
   const [generatingReport, setGeneratingReport] = useState(false)
 
@@ -176,17 +84,24 @@ export default function CompetitorsPage() {
 
   useEffect(() => { loadCompetitors(user?.id) }, [loadCompetitors, user?.id])
 
-  // Lazy-build detail data when competitor selected
   useEffect(() => {
     if (!selectedId) return
-    if (!creators[selectedId]) setCreators(p => ({ ...p, [selectedId]: buildCreators(selectedId) }))
-    if (!reports[selectedId]) setReports(p => ({ ...p, [selectedId]: buildReports(selectedId) }))
-    if (!videos[selectedId]) {
-      const comp = competitors.find(c => c.id === selectedId)
-      const allVideos = (comp?.accounts ?? []).flatMap(acc => buildVideos(acc.id, acc.platform))
-      setVideos(p => ({ ...p, [selectedId]: allVideos }))
+    if (!creators[selectedId]) {
+      fetchCompetitorCreators(selectedId)
+        .then(data => setCreators(p => ({ ...p, [selectedId]: data })))
+        .catch(() => setCreators(p => ({ ...p, [selectedId]: [] })))
     }
-  }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!reports[selectedId]) {
+      fetchAiReports(selectedId)
+        .then(data => setReports(p => ({ ...p, [selectedId]: data })))
+        .catch(() => setReports(p => ({ ...p, [selectedId]: [] })))
+    }
+    if (!videos[selectedId]) {
+      fetchCompetitorVideos(selectedId)
+        .then(data => setVideos(p => ({ ...p, [selectedId]: data })))
+        .catch(() => setVideos(p => ({ ...p, [selectedId]: [] })))
+    }
+  }, [selectedId, creators, reports, videos])
 
   function handleSelect(id: string) {
     setSelectedId(id); setActiveTab("Overview")
@@ -205,23 +120,7 @@ export default function CompetitorsPage() {
   function handleGenerateReport() {
     if (!selectedId) return
     setGeneratingReport(true)
-    setTimeout(() => {
-      const newReport: AiReport = {
-        id: `${selectedId}-fresh-${Date.now()}`,
-        workspace_id: null, competitor_id: selectedId,
-        week_of: new Date().toISOString().slice(0, 10),
-        summary: "Fresh analysis: Competitor significantly increased posting cadence this week — up 55% vs. their 4-week average. Three new creators in the 200K–800K range were spotted. Hook-first formats continue to dominate their top-performing content. Engagement rate is trending down slightly (9.1% → 8.4%), suggesting audience fatigue with current creative approach — a potential opening for you to capture share.",
-        top_videos: [{ url: "#", views: 4100000, caption: "This is why 2024 creators are leaving [competitor product] behind" }],
-        recommendations: [
-          "Their engagement dip signals creator burnout — now is the time to accelerate your own output",
-          "Newly spotted creators are likely in early contract negotiation — reach out immediately",
-          "Their hook formats are saturating their audience — differentiate with a storytime or behind-the-scenes approach",
-        ],
-        created_at: new Date().toISOString(),
-      }
-      setReports(prev => ({ ...prev, [selectedId]: [newReport, ...(prev[selectedId] ?? [])] }))
-      setGeneratingReport(false)
-    }, 2500)
+    setTimeout(() => setGeneratingReport(false), 800)
   }
 
   const compCreators = selectedId ? (creators[selectedId] ?? []) : []
@@ -233,6 +132,21 @@ export default function CompetitorsPage() {
     ? Math.round((selected.accounts.reduce((s, a) => s + a.avg_views, 0)) / selected.accounts.length)
     : 0
   const topPlatform = selected?.accounts?.sort((a, b) => b.total_views - a.total_views)[0]?.platform
+
+  const formatPie = useMemo(() => {
+    if (compVideos.length === 0) return []
+    const counts = new Map<string, number>()
+    for (const v of compVideos) {
+      const key = v.content_format ?? "other"
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    const colors = ["#7C3AED", "#3b82f6", "#10b981", "#f59e0b", "#6b7280"]
+    return Array.from(counts.entries()).map(([name, count], i) => ({
+      name: name.replace(/_/g, " "),
+      value: Math.round((count / compVideos.length) * 100),
+      color: colors[i % colors.length],
+    }))
+  }, [compVideos])
 
   return (
     <div style={{ display: "flex", gap: "0", height: "calc(100vh - 104px)", overflow: "hidden" }}>
@@ -398,7 +312,7 @@ export default function CompetitorsPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
                   {[
-                    { label: "Est. Creators",       value: compCreators.length || "~12", icon: Users,      color: "text-purple-400",  bg: "bg-purple-500/10" },
+                    { label: "Est. Creators",       value: String(compCreators.length), icon: Users,      color: "text-purple-400",  bg: "bg-purple-500/10" },
                     { label: "Total Views / Month",  value: formatNumber(totalViews),     icon: Eye,        color: "text-blue-400",    bg: "bg-blue-500/10"   },
                     { label: "Avg Views / Video",    value: formatNumber(avgViews),        icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10"},
                     { label: "Top Platform",         value: topPlatform ? PLATFORM_CONFIG[topPlatform].label : "—", icon: BarChart2, color: "text-amber-400", bg: "bg-amber-500/10" },
@@ -422,6 +336,9 @@ export default function CompetitorsPage() {
                   {/* Weekly trend */}
                   <div className="xl:col-span-2 rounded-xl border border-white/[0.06] bg-[#111111] p-5">
                     <h3 className="text-[15px] font-semibold text-white mb-4">Weekly Views Trend</h3>
+                    {weeklyData.length === 0 ? (
+                      <p className="text-sm text-zinc-500 text-center py-16">Weekly comparison data will appear after sync</p>
+                    ) : (
                     <ResponsiveContainer width="100%" height={200}>
                       <LineChart data={weeklyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
@@ -432,6 +349,7 @@ export default function CompetitorsPage() {
                         <Line type="monotone" dataKey="yours" stroke="#10b981" strokeWidth={2} dot={false} strokeDasharray="5 3" name="Your workspace" />
                       </LineChart>
                     </ResponsiveContainer>
+                    )}
                     <div className="flex items-center gap-4 mt-3">
                       <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-purple-500 rounded" /><span className="text-[11px] text-zinc-500">{selected.name}</span></div>
                       <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-emerald-500 rounded border-dashed" /><span className="text-[11px] text-zinc-500">Your workspace</span></div>
@@ -441,16 +359,20 @@ export default function CompetitorsPage() {
                   {/* Format pie */}
                   <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
                     <h3 className="text-[15px] font-semibold text-white mb-4">Content Format Mix</h3>
+                    {formatPie.length === 0 ? (
+                      <p className="text-sm text-zinc-500 text-center py-12">No video format data yet</p>
+                    ) : (
+                    <>
                     <ResponsiveContainer width="100%" height={160}>
                       <PieChart>
-                        <Pie data={FORMAT_PIE} cx="50%" cy="50%" innerRadius={40} outerRadius={68} paddingAngle={2} dataKey="value">
-                          {FORMAT_PIE.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        <Pie data={formatPie} cx="50%" cy="50%" innerRadius={40} outerRadius={68} paddingAngle={2} dataKey="value">
+                          {formatPie.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Pie>
                         <Tooltip formatter={(val) => [`${val}%`, "Share"]} contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", fontSize: "12px" }} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-1.5">
-                      {FORMAT_PIE.map(f => (
+                      {formatPie.map(f => (
                         <div key={f.name} className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-1.5">
                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: f.color }} />
@@ -460,6 +382,8 @@ export default function CompetitorsPage() {
                         </div>
                       ))}
                     </div>
+                    </>
+                    )}
                   </div>
                 </div>
 
@@ -620,11 +544,11 @@ export default function CompetitorsPage() {
                     <div className="px-5 py-3 text-center text-[11px] font-medium text-emerald-400 uppercase tracking-wider">Your Workspace</div>
                   </div>
                   {[
-                    { label: "Total Views",      comp: formatNumber(totalViews),    yours: formatNumber(3240000), compWin: totalViews > 3240000 },
-                    { label: "Creator Count",    comp: compCreators.length || 12,   yours: 5,                     compWin: (compCreators.length || 12) > 5 },
-                    { label: "Avg Views/Video",  comp: formatNumber(avgViews),       yours: formatNumber(680000),  compWin: avgViews > 680000 },
-                    { label: "Videos / Month",   comp: 38,                          yours: 20,                    compWin: true },
-                    { label: "Top Format",       comp: "Hook-First",                 yours: "Testimonial",         compWin: null },
+                    { label: "Total Views",      comp: formatNumber(totalViews),    yours: "0", compWin: null as boolean | null },
+                    { label: "Creator Count",    comp: String(compCreators.length), yours: "0", compWin: null },
+                    { label: "Avg Views/Video",  comp: formatNumber(avgViews),       yours: "0", compWin: null },
+                    { label: "Videos Tracked",   comp: String(compVideos.length),    yours: "0", compWin: null },
+                    { label: "Top Format",       comp: formatPie[0]?.name ?? "—",   yours: "—", compWin: null },
                   ].map(row => (
                     <div key={row.label} className="grid grid-cols-3 border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
                       <div className="px-5 py-3.5 text-sm text-zinc-400">{row.label}</div>

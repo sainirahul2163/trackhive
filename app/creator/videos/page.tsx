@@ -30,25 +30,7 @@ interface CreatorVideo {
   dailyViews: number[]
 }
 
-// ── Mock data ──────────────────────────────────────────────────
-function makeDailyViews(peak: number): number[] {
-  return Array.from({ length: 14 }, (_, i) => {
-    const decay = Math.max(0.05, 1 - i * 0.08)
-    return Math.round(peak * decay * (0.7 + Math.random() * 0.6))
-  })
-}
-
-const MOCK_VIDEOS: CreatorVideo[] = [
-  { id: "v1",  title: "Honest product review — it actually works 🔥",        platform: "tiktok",    views: 3200000, likes: 241000, comments: 18400, shares: 92000, saves: 61000, engagement: 7.4, virality: 9.1, campaign: "Summer Drop 2025",       campaignBrand: "AuraBrand", postedAt: "2025-06-01", payout: 520,  dailyViews: makeDailyViews(380000) },
-  { id: "v2",  title: "Day in my life as a fitness creator 💪",               platform: "tiktok",    views: 1800000, likes: 142000, comments: 9800,  shares: 44000, saves: 38000, engagement: 6.8, virality: 8.4, campaign: "Summer Drop 2025",       campaignBrand: "AuraBrand", postedAt: "2025-05-28", payout: 280,  dailyViews: makeDailyViews(210000) },
-  { id: "v3",  title: "POV: you finally found skincare that works ✨",        platform: "instagram", views: 880000,  likes: 74000,  comments: 4200,  shares: 18000, saves: 29000, engagement: 7.1, virality: 7.8, campaign: "Back to School Fitness",  campaignBrand: "FitEdge",   postedAt: "2025-05-24", payout: 140,  dailyViews: makeDailyViews(110000) },
-  { id: "v4",  title: "Full NexGear headphones unboxing + sound test 🎧",    platform: "youtube",   views: 1500000, likes: 98000,  comments: 12100, shares: 31000, saves: 14000, engagement: 6.0, virality: 8.0, campaign: "Tech Unboxing Series",    campaignBrand: "NexGear",   postedAt: "2025-05-20", payout: 210,  dailyViews: makeDailyViews(180000) },
-  { id: "v5",  title: "Get ready with me feat. this summer collection",       platform: "instagram", views: 670000,  likes: 51000,  comments: 3100,  shares: 12000, saves: 22000, engagement: 6.6, virality: 7.4, postedAt: "2025-05-15",             dailyViews: makeDailyViews(85000)  },
-  { id: "v6",  title: "My morning routine changed everything (storytime)",     platform: "tiktok",    views: 2400000, likes: 189000, comments: 14200, shares: 67000, saves: 48000, engagement: 7.0, virality: 8.8, postedAt: "2025-05-10",             dailyViews: makeDailyViews(290000) },
-  { id: "v7",  title: "Testing viral gym hacks so you don't have to 😤",     platform: "tiktok",    views: 4100000, likes: 321000, comments: 24800, shares: 118000, saves: 79000, engagement: 7.9, virality: 9.6, postedAt: "2025-05-05",             dailyViews: makeDailyViews(480000) },
-  { id: "v8",  title: "Aesthetic meal prep for the week 🥑",                  platform: "instagram", views: 490000,  likes: 41000,  comments: 2800,  shares: 9800,  saves: 19000, engagement: 5.9, virality: 6.9, postedAt: "2025-04-29",             dailyViews: makeDailyViews(62000)  },
-  { id: "v9",  title: "Rating every sunscreen from drugstore 🌞",             platform: "youtube",   views: 720000,  likes: 58000,  comments: 6200,  shares: 14000, saves: 11000, engagement: 5.7, virality: 7.1, postedAt: "2025-04-22",             dailyViews: makeDailyViews(88000)  },
-]
+const VIDEOS: CreatorVideo[] = []
 
 const PLATFORM_CFG: Record<Platform, { label: string; color: string; bg: string }> = {
   tiktok:    { label: "TikTok",    color: "#fafafa", bg: "rgba(255,255,255,0.1)" },
@@ -203,7 +185,7 @@ export default function CreatorVideosPage() {
   const [selected, setSelected] = useState<CreatorVideo | null>(null)
 
   const filtered = useMemo(() => {
-    let list = MOCK_VIDEOS.filter(v => {
+    let list = VIDEOS.filter(v => {
       if (platform !== "all" && v.platform !== platform) return false
       if (search && !v.title.toLowerCase().includes(search.toLowerCase())) return false
       return true
@@ -214,9 +196,9 @@ export default function CreatorVideosPage() {
     return list
   }, [platform, sort, search])
 
-  const totalViews = MOCK_VIDEOS.reduce((s, v) => s + v.views, 0)
-  const avgViews   = Math.round(totalViews / MOCK_VIDEOS.length)
-  const bestPlat   = "TikTok"
+  const totalViews = VIDEOS.reduce((s, v) => s + v.views, 0)
+  const avgViews   = VIDEOS.length > 0 ? Math.round(totalViews / VIDEOS.length) : 0
+  const bestPlat   = "—"
 
   const PLATFORM_TABS: { id: Platform | "all"; label: string }[] = [
     { id: "all",       label: "All" },
@@ -231,7 +213,9 @@ export default function CreatorVideosPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
         <div>
           <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#fafafa" }}>My Videos</h1>
-          <p style={{ fontSize: "13px", color: "#71717a", marginTop: "3px" }}>{MOCK_VIDEOS.length} videos tracked across 3 platforms</p>
+          <p style={{ fontSize: "13px", color: "#71717a", marginTop: "3px" }}>
+            {VIDEOS.length === 0 ? "No videos tracked yet" : `${VIDEOS.length} video${VIDEOS.length !== 1 ? "s" : ""} tracked`}
+          </p>
         </div>
         <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "9px", backgroundColor: "#7C3AED", color: "white", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer" }}>
           + Add Video URL
@@ -241,7 +225,7 @@ export default function CreatorVideosPage() {
       {/* Stats bar */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: "10px" }}>
         {[
-          { label: "Total Videos",  value: String(MOCK_VIDEOS.length), icon: Play,       color: "#a78bfa" },
+          { label: "Total Videos",  value: String(VIDEOS.length), icon: Play,       color: "#a78bfa" },
           { label: "Total Views",   value: fmt(totalViews),             icon: Eye,        color: "#60a5fa" },
           { label: "Avg Views",     value: fmt(avgViews),               icon: TrendingUp, color: "#34d399" },
           { label: "Best Platform", value: bestPlat,                    icon: ArrowUpRight, color: "#fbbf24" },
@@ -298,8 +282,12 @@ export default function CreatorVideosPage() {
           <div style={{ width: "48px", height: "48px", borderRadius: "14px", backgroundColor: "rgba(124,58,237,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
             <Play style={{ width: "22px", height: "22px", color: "#a78bfa" }} />
           </div>
-          <p style={{ fontSize: "15px", fontWeight: 700, color: "#fafafa", marginBottom: "6px" }}>No videos found</p>
-          <p style={{ fontSize: "13px", color: "#71717a" }}>Try adjusting your filters, or add your first video URL.</p>
+          <p style={{ fontSize: "15px", fontWeight: 700, color: "#fafafa", marginBottom: "6px" }}>
+            {VIDEOS.length === 0 ? "No videos tracked yet" : "No videos found"}
+          </p>
+          <p style={{ fontSize: "13px", color: "#71717a" }}>
+            {VIDEOS.length === 0 ? "Add your first video URL to start tracking performance." : "Try adjusting your filters."}
+          </p>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px,1fr))", gap: "14px" }}>

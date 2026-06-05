@@ -42,18 +42,16 @@ function extractHandle(url: string): string {
   } catch { return url }
 }
 
-interface MockPreview {
+interface UrlPreview {
   handle: string
   platform: Platform
-  followers: string
-  avatar: string
 }
 
 export default function OnboardingStep2() {
   const router = useRouter()
   const [url, setUrl] = useState("")
   const [platform, setPlatform] = useState<Platform | null>(null)
-  const [preview, setPreview] = useState<MockPreview | null>(null)
+  const [preview, setPreview] = useState<UrlPreview | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -63,8 +61,7 @@ export default function OnboardingStep2() {
       setLoading(true)
       const t = setTimeout(() => {
         const handle = extractHandle(url)
-        const followers: Record<Platform, string> = { tiktok: "892K", instagram: "541K", youtube: "284K", facebook: "198K" }
-        setPreview({ handle, platform: p, followers: followers[p], avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${handle}` })
+        setPreview({ handle, platform: p })
         setLoading(false)
       }, 900)
       return () => clearTimeout(t)
@@ -127,15 +124,16 @@ export default function OnboardingStep2() {
             {/* Preview card */}
             {preview && !loading && (
               <div style={{ borderRadius: "12px", border: "1px solid rgba(124,58,237,0.2)", backgroundColor: "rgba(124,58,237,0.06)", padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
-                <img src={preview.avatar} alt={preview.handle} className="w-12 h-12 rounded-full bg-purple-600/20 flex-shrink-0" />
+                <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "rgba(124,58,237,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <PlatformIcon platform={preview.platform} className="w-5 h-5" />
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white">{preview.handle}</p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span style={{ fontSize: "11px", fontWeight: 500, color: PLATFORM_CONFIG[preview.platform].fgColor }}>{PLATFORM_CONFIG[preview.platform].label}</span>
-                    <span className="text-xs text-zinc-500">· {preview.followers} followers</span>
+                    <span className="text-xs text-zinc-500">· Sync to load followers</span>
                   </div>
                 </div>
-                <span className="text-[11px] text-emerald-400 font-medium bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex-shrink-0">Ready</span>
               </div>
             )}
           </div>

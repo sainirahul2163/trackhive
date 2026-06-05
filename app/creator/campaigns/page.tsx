@@ -21,33 +21,6 @@ interface CampaignInvite {
   sentAt: string
 }
 
-const MOCK_INVITES: CampaignInvite[] = [
-  {
-    id: "inv1",
-    brand: "LumaGlow",
-    brandInitials: "LG",
-    brandColor: "#fbbf24",
-    campaignName: "Glow Routine Challenge",
-    niche: "Beauty",
-    budget: 900,
-    deadline: "2025-08-01",
-    message: "Hi! We love your authentic content and think you'd be perfect for our 7-day glow challenge. We're offering $300/video with a bonus for high-performing posts. Would love to work with you!",
-    sentAt: "2025-06-28",
-  },
-  {
-    id: "inv2",
-    brand: "CoreShift",
-    brandInitials: "CS",
-    brandColor: "#34d399",
-    campaignName: "Summer Strength Series",
-    niche: "Fitness",
-    budget: 600,
-    deadline: "2025-07-30",
-    message: "Hey! CoreShift is launching a new pre-workout line and we want creators who keep it real. 2 videos, your style, $300 each. Let us know if you're in!",
-    sentAt: "2025-06-27",
-  },
-]
-
 // ── Types ──────────────────────────────────────────────────────
 type CampaignStatus = "active" | "pending" | "completed" | "paused"
 
@@ -83,143 +56,7 @@ interface Campaign {
   tag?: string
 }
 
-// ── Mock data ──────────────────────────────────────────────────
-const MOCK_CAMPAIGNS: Campaign[] = [
-  {
-    id: "c1",
-    name: "Summer Drop 2025",
-    brand: "AuraBrand",
-    brandInitials: "AB",
-    brandColor: "#a78bfa",
-    status: "active",
-    deadline: "2025-07-15",
-    startDate: "2025-06-01",
-    brief: "Showcase our new Summer collection in your authentic style. We want real, unfiltered moments — try-ons, day-in-the-life content, or honest first impressions. Avoid scripted talking points; your audience trusts you for a reason. Focus on the lifestyle, not the product specs.",
-    earnings: 800,
-    potential: 1400,
-    videosRequired: 4,
-    videosPosted: 2,
-    platforms: ["TikTok", "Instagram"],
-    requirements: [
-      { label: "Post 4 videos within campaign window", done: false },
-      { label: "Include #AuraVibes and #SummerDrop in caption", done: true },
-      { label: "Tag @AuraBrand in at least 2 posts", done: true },
-      { label: "Use promo code AURA20 in bio or pinned comment", done: false },
-    ],
-    deliverables: [
-      { type: "video", description: "First impressions / unboxing video (60–90 sec)" },
-      { type: "video", description: "GRWM or lifestyle video featuring product (30–60 sec)" },
-      { type: "video", description: "Day-in-the-life featuring at least one item" },
-      { type: "link", description: "Affiliate link in bio for duration of campaign" },
-    ],
-    contentGuidelines: [
-      "No competitor product logos visible",
-      "Do not alter or return items — keep for review purposes",
-      "Disclose partnership per FTC guidelines (#ad or #sponsored)",
-      "Do not post during blackout window: June 12–15",
-    ],
-    paymentTerms: "$200 per video upon posting. Bonus $600 if any single video hits 1M views within 30 days.",
-    tag: "Fashion",
-  },
-  {
-    id: "c2",
-    name: "Back to School Fitness",
-    brand: "FitEdge",
-    brandInitials: "FE",
-    brandColor: "#34d399",
-    status: "active",
-    deadline: "2025-08-10",
-    startDate: "2025-07-01",
-    brief: "FitEdge wants creators to demonstrate how their resistance bands and equipment fit into a back-to-school or busy-schedule workout routine. Focus on convenience and effectiveness. Show real workouts, not just product placement.",
-    earnings: 420,
-    potential: 700,
-    videosRequired: 3,
-    videosPosted: 1,
-    platforms: ["Instagram", "YouTube"],
-    requirements: [
-      { label: "Post 3 workout videos featuring FitEdge gear", done: false },
-      { label: "Link to fitedge.com/creator in bio", done: true },
-      { label: "Include before/after or workout progress", done: false },
-    ],
-    deliverables: [
-      { type: "video", description: "Full workout routine with FitEdge bands (YouTube, 8–15 min)" },
-      { type: "video", description: "Quick 60-sec workout tip for Instagram Reels" },
-      { type: "post", description: "Instagram static post with product tag" },
-    ],
-    contentGuidelines: [
-      "Show real workouts — no lip-sync or dance content",
-      "Mention at least one product by name verbally",
-      "Disclose partnership with #FitEdgePartner",
-    ],
-    paymentTerms: "$140 per deliverable upon review and approval. No late posting after deadline.",
-    tag: "Fitness",
-  },
-  {
-    id: "c3",
-    name: "Tech Unboxing Series",
-    brand: "NexGear",
-    brandInitials: "NG",
-    brandColor: "#60a5fa",
-    status: "completed",
-    deadline: "2025-05-31",
-    startDate: "2025-05-01",
-    brief: "Full honest review of the NexGear X1 headphones. We want your real opinion — pros and cons. Our audience respects authenticity more than scripted praise.",
-    earnings: 1200,
-    potential: 1200,
-    videosRequired: 2,
-    videosPosted: 2,
-    platforms: ["YouTube"],
-    requirements: [
-      { label: "Unboxing + first impressions video", done: true },
-      { label: "Full 7-day review after use", done: true },
-      { label: "Include discount code NEXCREATOR", done: true },
-    ],
-    deliverables: [
-      { type: "video", description: "Unboxing + first impressions (YouTube, 8–12 min)" },
-      { type: "video", description: "7-day follow-up review" },
-    ],
-    contentGuidelines: [
-      "Be honest — we want real feedback",
-      "Show product in daily use",
-      "Disclose partnership #NexPartner",
-    ],
-    paymentTerms: "$600 per video upon upload and review.",
-    tag: "Tech",
-  },
-  {
-    id: "c4",
-    name: "Glow Routine Challenge",
-    brand: "LumaGlow",
-    brandInitials: "LG",
-    brandColor: "#fbbf24",
-    status: "pending",
-    deadline: "2025-08-01",
-    startDate: "2025-07-15",
-    brief: "Document a 7-day morning routine challenge using LumaGlow Vitamin C serum. We want to see the transformation and your genuine reaction to the results.",
-    earnings: 0,
-    potential: 900,
-    videosRequired: 3,
-    videosPosted: 0,
-    platforms: ["TikTok", "Instagram"],
-    requirements: [
-      { label: "7-day routine documentation across 3 videos", done: false },
-      { label: "Use #GlowChallenge in all posts", done: false },
-      { label: "Before/after reveal in final video", done: false },
-    ],
-    deliverables: [
-      { type: "video", description: "Day 1: Start of challenge (intro + baseline)" },
-      { type: "video", description: "Day 4: Mid-challenge check-in" },
-      { type: "video", description: "Day 7: Final reveal + honest review" },
-    ],
-    contentGuidelines: [
-      "Natural, well-lit shots — no heavy filters on skin",
-      "Mention serum by full name in at least one video",
-      "Disclose partnership with #ad",
-    ],
-    paymentTerms: "$300 per video. $300 bonus if before/after video gets 500K+ views.",
-    tag: "Beauty",
-  },
-]
+const CAMPAIGNS: Campaign[] = []
 
 const STATUS_CFG: Record<CampaignStatus, { label: string; color: string; bg: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = {
   active:    { label: "Active",    color: "#34d399", bg: "rgba(52,211,153,0.1)",  icon: TrendingUp },
@@ -403,7 +240,7 @@ function DeclineModal({ invite, onConfirm, onCancel }: DeclineModalProps) {
 export default function CreatorCampaignsPage() {
   const [filter, setFilter] = useState<CampaignStatus | "all">("all")
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
-  const [invites, setInvites] = useState<CampaignInvite[]>(MOCK_INVITES)
+  const [invites, setInvites] = useState<CampaignInvite[]>([])
   const [expandedInvite, setExpandedInvite] = useState<string | null>(null)
   const [decliningInvite, setDecliningInvite] = useState<CampaignInvite | null>(null)
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set())
@@ -422,17 +259,17 @@ export default function CreatorCampaignsPage() {
   }
 
   const filtered = useMemo(
-    () => filter === "all" ? MOCK_CAMPAIGNS : MOCK_CAMPAIGNS.filter(c => c.status === filter),
+    () => filter === "all" ? CAMPAIGNS : CAMPAIGNS.filter(c => c.status === filter),
     [filter]
   )
 
-  const totalEarned    = MOCK_CAMPAIGNS.reduce((s, c) => s + c.earnings, 0)
-  const totalPotential = MOCK_CAMPAIGNS.reduce((s, c) => s + c.potential, 0)
-  const activeCnt      = MOCK_CAMPAIGNS.filter(c => c.status === "active").length
-  const pendingCnt     = MOCK_CAMPAIGNS.filter(c => c.status === "pending").length
+  const totalEarned    = CAMPAIGNS.reduce((s, c) => s + c.earnings, 0)
+  const totalPotential = CAMPAIGNS.reduce((s, c) => s + c.potential, 0)
+  const activeCnt      = CAMPAIGNS.filter(c => c.status === "active").length
+  const pendingCnt     = CAMPAIGNS.filter(c => c.status === "pending").length
 
   const TABS: { id: CampaignStatus | "all"; label: string }[] = [
-    { id: "all",       label: `All (${MOCK_CAMPAIGNS.length})` },
+    { id: "all",       label: `All (${CAMPAIGNS.length})` },
     { id: "active",    label: `Active (${activeCnt})` },
     { id: "pending",   label: `Pending (${pendingCnt})` },
     { id: "completed", label: "Completed" },

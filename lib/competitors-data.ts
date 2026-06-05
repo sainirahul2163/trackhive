@@ -8,7 +8,7 @@ export async function fetchCompetitors(userId?: string): Promise<Competitor[]> {
     .order("created_at", { ascending: false })
 
   if (userId) {
-    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+    query = query.eq("workspace_id", userId)
   }
 
   const { data, error } = await query

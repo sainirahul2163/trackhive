@@ -8,7 +8,7 @@ export async function fetchCreators(userId?: string): Promise<Creator[]> {
     .order("created_at", { ascending: false })
 
   if (userId) {
-    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+    query = query.eq("workspace_id", userId)
   }
 
   const { data, error } = await query
@@ -23,7 +23,7 @@ export async function fetchPayouts(status?: string, userId?: string): Promise<Pa
     .order("created_at", { ascending: false })
 
   if (status) query = query.eq("status", status)
-  if (userId) query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+  if (userId) query = query.eq("workspace_id", userId)
 
   const { data, error } = await query
   if (error) throw new Error(error.message)
@@ -37,7 +37,7 @@ export async function fetchPayoutRules(userId?: string): Promise<PayoutRule[]> {
     .order("is_default", { ascending: false })
 
   if (userId) {
-    query = query.or(`workspace_id.eq.${userId},workspace_id.is.null`)
+    query = query.eq("workspace_id", userId)
   }
 
   const { data, error } = await query

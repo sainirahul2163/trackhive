@@ -67,11 +67,15 @@ function ShopifyIcon() {
 function APIKeySection() {
   const [revealed, setRevealed] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const MOCK_KEY = "th_live_sk_a8f3k2x9p1q7m5b4n6w0y2j8"
-  const maskedKey = "th_live_sk_" + "•".repeat(16)
+  const apiKey: string | null = null
+  const maskedKey = "No API key generated"
 
   function copyKey() {
-    navigator.clipboard.writeText(MOCK_KEY).then(() => toast.success("API key copied"))
+    if (!apiKey) {
+      toast.error("Generate an API key first")
+      return
+    }
+    navigator.clipboard.writeText(apiKey).then(() => toast.success("API key copied"))
   }
 
   function handleRegenerate() {
@@ -83,7 +87,7 @@ function APIKeySection() {
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", borderRadius: "8px", backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: "10px" }}>
         <code style={{ flex: 1, fontSize: "12px", color: "#a1a1aa", fontFamily: "monospace", letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {revealed ? MOCK_KEY : maskedKey}
+          {apiKey ? (revealed ? apiKey : "th_live_sk_" + "•".repeat(16)) : maskedKey}
         </code>
         <button onClick={() => setRevealed(!revealed)} style={{ width: "28px", height: "28px", borderRadius: "6px", backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           {revealed ? <EyeOff style={{ width: "13px", height: "13px", color: "#71717a" }} /> : <Eye style={{ width: "13px", height: "13px", color: "#71717a" }} />}

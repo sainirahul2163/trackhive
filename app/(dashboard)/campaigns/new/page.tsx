@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -10,18 +10,11 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
 import { insertCampaign, insertCampaignCreators } from "@/lib/campaigns-data"
+import { fetchTrackedAccounts } from "@/lib/analytics-data"
+import { useUser } from "@/lib/use-user"
 import type { TrackedAccount } from "@/types"
 import { cn } from "@/lib/utils"
-
-// ── Mock tracked accounts for creator selection ───────────────
-const MOCK_CREATORS: TrackedAccount[] = [
-  { id: "1", workspace_id: null, platform: "tiktok",    username: "jake_fitness",  display_name: "Jake Fitness",   avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=jake",  profile_url: null, follower_count: 1240000, total_views: 48200000, avg_views: 820000, engagement_rate: 6.8, last_synced_at: null, created_at: "" },
-  { id: "2", workspace_id: null, platform: "instagram", username: "glowup_daily",  display_name: "Glow Up Daily",  avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=glow",  profile_url: null, follower_count: 892000,  total_views: 21500000, avg_views: 340000, engagement_rate: 4.2, last_synced_at: null, created_at: "" },
-  { id: "3", workspace_id: null, platform: "youtube",   username: "techreviewer",  display_name: "Tech Reviewer",  avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=tech",  profile_url: null, follower_count: 560000,  total_views: 92000000, avg_views: 1200000, engagement_rate: 3.5, last_synced_at: null, created_at: "" },
-  { id: "4", workspace_id: null, platform: "tiktok",    username: "freelife_nyc",  display_name: "Free Life NYC",  avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=free",  profile_url: null, follower_count: 330000,  total_views: 9800000,  avg_views: 290000, engagement_rate: 5.1, last_synced_at: null, created_at: "" },
-  { id: "5", workspace_id: null, platform: "instagram", username: "moneymoves22",  display_name: "Money Moves",    avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=money", profile_url: null, follower_count: 210000,  total_views: 5400000,  avg_views: 180000, engagement_rate: 3.9, last_synced_at: null, created_at: "" },
-  { id: "6", workspace_id: null, platform: "youtube",   username: "cookwithsana",  display_name: "Cook with Sana", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=sana",  profile_url: null, follower_count: 142000,  total_views: 3100000,  avg_views: 95000,  engagement_rate: 7.2, last_synced_at: null, created_at: "" },
-]
+import { Users } from "lucide-react"
 
 // ── Step config ───────────────────────────────────────────────
 const STEPS = [
@@ -96,8 +89,11 @@ function Toggle({ enabled, onChange, label }: { enabled: boolean; onChange: (v: 
 
 export default function NewCampaignPage() {
   const router = useRouter()
+  const { user } = useUser()
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
+  const [trackedAccounts, setTrackedAccounts] = useState<TrackedAccount[]>([])
+  const [accountsLoading, setAccountsLoading] = useState(true)
 
   const [basic, setBasic] = useState<BasicInfo>({
     name: "", brand: "", start_date: "", end_date: "",
@@ -115,7 +111,16 @@ export default function NewCampaignPage() {
 
   const [brief, setBrief] = useState("")
 
-  const filteredCreators = MOCK_CREATORS.filter(c =>
+  useEffect(() => {
+    if (!user) return
+    setAccountsLoading(true)
+    fetchTrackedAccounts(user.id)
+      .then(setTrackedAccounts)
+      .catch(() => setTrackedAccounts([]))
+      .finally(() => setAccountsLoading(false))
+  }, [user])
+
+  const filteredCreators = trackedAccounts.filter(c =>
     c.username.toLowerCase().includes(creatorSearch.toLowerCase()) ||
     (c.display_name ?? "").toLowerCase().includes(creatorSearch.toLowerCase())
   )
@@ -141,7 +146,7 @@ export default function NewCampaignPage() {
     setSaving(true)
     try {
       const campaign = await insertCampaign({
-        workspace_id: null,
+        workspace_id: user?.id ?? null,
         name: basic.name || "Untitled Campaign",
         brand: basic.brand || null,
         status: saveAsDraft ? "draft" : "active",
@@ -266,7 +271,16 @@ export default function NewCampaignPage() {
               />
             </div>
             <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
-              {filteredCreators.map(creator => {
+              {accountsLoading ? (
+                <p className="text-sm text-zinc-500 text-center py-8">Loading creators…</p>
+              ) : filteredCreators.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] p-8 text-center">
+                  <Users className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-400">No tracked creators yet</p>
+                  <p className="text-xs text-zinc-600 mt-1 mb-4">Add accounts in Analytics before assigning them to a campaign.</p>
+                  <Link href="/analytics" className="text-xs text-purple-400 hover:text-purple-300">Go to Analytics →</Link>
+                </div>
+              ) : filteredCreators.map(creator => {
                 const selected = selectedCreators.includes(creator.id)
                 const cfg = PLATFORM_CONFIG[creator.platform]
                 return (
@@ -426,7 +440,7 @@ export default function NewCampaignPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {selectedCreators.map(id => {
-                      const c = MOCK_CREATORS.find(x => x.id === id)
+                      const c = trackedAccounts.find(x => x.id === id)
                       if (!c) return null
                       return (
                         <span key={id} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/[0.05] border border-white/[0.06] text-xs text-zinc-300">

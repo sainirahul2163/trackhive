@@ -32,29 +32,9 @@ interface PaymentMethod {
   isPrimary: boolean
 }
 
-// ── Mock data ──────────────────────────────────────────────────
-const MONTHLY: { month: string; earnings: number }[] = [
-  { month: "Jan", earnings: 240  },
-  { month: "Feb", earnings: 380  },
-  { month: "Mar", earnings: 520  },
-  { month: "Apr", earnings: 310  },
-  { month: "May", earnings: 1400 },
-  { month: "Jun", earnings: 900  },
-]
-
-const PAYOUTS: Payout[] = [
-  { id: "p1", campaign: "Summer Drop 2025",        brand: "AuraBrand",  amount: 400,  status: "pending",    date: "2025-07-15", method: "Bank",   ref: "TH-20250715-01" },
-  { id: "p2", campaign: "Tech Unboxing Series",    brand: "NexGear",    amount: 600,  status: "paid",       date: "2025-06-01", method: "PayPal", ref: "TH-20250601-07" },
-  { id: "p3", campaign: "Tech Unboxing Series",    brand: "NexGear",    amount: 600,  status: "paid",       date: "2025-05-18", method: "PayPal", ref: "TH-20250518-04" },
-  { id: "p4", campaign: "Back to School Fitness",  brand: "FitEdge",    amount: 280,  status: "processing", date: "2025-07-01", method: "Bank",   ref: "TH-20250701-02" },
-  { id: "p5", campaign: "Glow Routine Challenge",  brand: "LumaGlow",   amount: 0,    status: "pending",    date: "2025-08-01", method: "—",      ref: "TH-20250801-05" },
-  { id: "p6", campaign: "Summer Drop 2025",        brand: "AuraBrand",  amount: 400,  status: "paid",       date: "2025-06-15", method: "Bank",   ref: "TH-20250615-03" },
-]
-
-const PAYMENT_METHODS: PaymentMethod[] = [
-  { id: "pm1", type: "bank",   label: "Chase Checking",      last4: "4891", isPrimary: true  },
-  { id: "pm2", type: "paypal", label: "PayPal",              last4: "mco@", isPrimary: false },
-]
+const MONTHLY: { month: string; earnings: number }[] = []
+const PAYOUTS: Payout[] = []
+const PAYMENT_METHODS: PaymentMethod[] = []
 
 const STATUS_CFG: Record<PayoutStatus, { label: string; color: string; bg: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = {
   paid:       { label: "Paid",       color: "#34d399", bg: "rgba(52,211,153,0.1)",  icon: CheckCircle2 },
@@ -111,7 +91,13 @@ function PayMethodDrawer({ methods, onClose }: PayMethodDrawerProps) {
 
         <div style={{ padding: "20px 22px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <p style={{ fontSize: "11px", fontWeight: 700, color: "#52525b", textTransform: "uppercase", letterSpacing: "0.07em" }}>Saved methods</p>
-          {editMethods.map(pm => {
+          {editMethods.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.06)", backgroundColor: "rgba(255,255,255,0.02)" }}>
+              <CreditCard style={{ width: "24px", height: "24px", color: "#52525b", margin: "0 auto 10px" }} />
+              <p style={{ fontSize: "13px", fontWeight: 600, color: "#a1a1aa", marginBottom: "4px" }}>No payment methods</p>
+              <p style={{ fontSize: "11px", color: "#52525b" }}>Add a method to receive campaign payouts.</p>
+            </div>
+          ) : editMethods.map(pm => {
             const Icon = TypeIcon(pm.type)
             return (
               <div key={pm.id} style={{ borderRadius: "12px", border: pm.isPrimary ? "1px solid rgba(124,58,237,0.3)" : "1px solid rgba(255,255,255,0.07)", backgroundColor: pm.isPrimary ? "rgba(124,58,237,0.04)" : "#0d0d0d", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px" }}>
@@ -152,7 +138,7 @@ export default function CreatorEarningsPage() {
 
   const totalEarned  = PAYOUTS.filter(p => p.status === "paid").reduce((s, p) => s + p.amount, 0)
   const pending      = PAYOUTS.filter(p => p.status === "pending").reduce((s, p) => s + p.amount, 0)
-  const thisMonth    = 900
+  const thisMonth    = 0
   const allTimeTotal = MONTHLY.reduce((s, m) => s + m.earnings, 0)
 
   const filtered = statusFilter === "all" ? PAYOUTS : PAYOUTS.filter(p => p.status === statusFilter)
@@ -164,7 +150,7 @@ export default function CreatorEarningsPage() {
     { id: "processing",label: "Processing" },
   ]
 
-  const maxEarnings = Math.max(...MONTHLY.map(m => m.earnings))
+  const maxEarnings = MONTHLY.length > 0 ? Math.max(...MONTHLY.map(m => m.earnings)) : 0
 
   return (
     <div style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -212,25 +198,34 @@ export default function CreatorEarningsPage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
           <div>
             <p style={{ fontSize: "14px", fontWeight: 700, color: "#fafafa" }}>Monthly Earnings</p>
-            <p style={{ fontSize: "11px", color: "#52525b", marginTop: "2px" }}>2025 overview</p>
+            <p style={{ fontSize: "11px", color: "#52525b", marginTop: "2px" }}>
+              {MONTHLY.length > 0 ? "Earnings overview" : "No earnings data yet"}
+            </p>
           </div>
-          <span style={{ fontSize: "12px", fontWeight: 700, color: "#34d399" }}>+43% vs last 6 mo</span>
         </div>
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={MONTHLY} barSize={28} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#52525b" }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: "#52525b" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
-            <Tooltip content={<BarTT />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-            <Bar dataKey="earnings" radius={[5, 5, 0, 0]}>
-              {MONTHLY.map((entry, i) => (
-                <Cell
-                  key={i}
-                  fill={entry.earnings === maxEarnings ? "#7C3AED" : "rgba(124,58,237,0.3)"}
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {MONTHLY.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "48px 24px" }}>
+            <DollarSign style={{ width: "28px", height: "28px", color: "#52525b", margin: "0 auto 12px" }} />
+            <p style={{ fontSize: "14px", fontWeight: 600, color: "#a1a1aa", marginBottom: "4px" }}>No earnings yet</p>
+            <p style={{ fontSize: "12px", color: "#52525b" }}>Complete campaigns to start earning payouts.</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={MONTHLY} barSize={28} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#52525b" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "#52525b" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+              <Tooltip content={<BarTT />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+              <Bar dataKey="earnings" radius={[5, 5, 0, 0]}>
+                {MONTHLY.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={entry.earnings === maxEarnings ? "#7C3AED" : "rgba(124,58,237,0.3)"}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* Payout table */}
@@ -249,8 +244,14 @@ export default function CreatorEarningsPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center" }}>
-            <p style={{ color: "#52525b", fontSize: "13px" }}>No payouts match this filter.</p>
+          <div style={{ padding: "48px 24px", textAlign: "center" }}>
+            <Clock style={{ width: "24px", height: "24px", color: "#52525b", margin: "0 auto 10px" }} />
+            <p style={{ fontSize: "14px", fontWeight: 600, color: "#a1a1aa", marginBottom: "4px" }}>
+              {PAYOUTS.length === 0 ? "No payouts yet" : "No payouts match this filter"}
+            </p>
+            <p style={{ fontSize: "12px", color: "#52525b" }}>
+              {PAYOUTS.length === 0 ? "Payouts from completed campaigns will appear here." : "Try a different status filter."}
+            </p>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>

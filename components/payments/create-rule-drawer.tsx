@@ -69,6 +69,7 @@ export function CreateRuleDrawer({ open, onClose, onSave }: CreateRuleDrawerProp
   const [window, setWindow] = useState(30)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   function estimatedPayout(views: number, videos: number) {
     const base = baseFeeEnabled ? parseFloat(baseFee || "0") * videos : 0
@@ -86,12 +87,14 @@ export function CreateRuleDrawer({ open, onClose, onSave }: CreateRuleDrawerProp
     setMilestoneBonus("500"); setMilestoneViews("1000000")
     setCapEnabled(false); setCap("2000"); setWindow(30)
     setSaved(false)
+    setError(null)
     onClose()
   }
 
   async function handleSave() {
     if (!name.trim()) return
     setSaving(true)
+    setError(null)
     try {
       const payload = {
         name: name.trim(),
@@ -111,23 +114,7 @@ export function CreateRuleDrawer({ open, onClose, onSave }: CreateRuleDrawerProp
       setSaved(true)
       setTimeout(handleClose, 1500)
     } catch {
-      // Optimistic in demo mode
-      const mockRule: PayoutRule = {
-        id: Math.random().toString(36).slice(2),
-        workspace_id: null,
-        name: name.trim(),
-        base_fee: baseFeeEnabled ? parseFloat(baseFee || "0") : 0,
-        cpm_rate: cpmEnabled ? parseFloat(cpmRate || "0") : 0,
-        milestone_bonus: milestoneEnabled ? parseFloat(milestoneBonus || "0") : 0,
-        milestone_views: milestoneEnabled ? parseInt(milestoneViews || "0") : 0,
-        performance_cap: capEnabled ? parseFloat(cap || "0") : 0,
-        payout_window_days: window,
-        is_default: false,
-        created_at: new Date().toISOString(),
-      }
-      onSave(mockRule)
-      setSaved(true)
-      setTimeout(handleClose, 1500)
+      setError("Failed to save payout rule. Please try again.")
     } finally {
       setSaving(false)
     }
@@ -159,6 +146,9 @@ export function CreateRuleDrawer({ open, onClose, onSave }: CreateRuleDrawerProp
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          {error && (
+            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
+          )}
           <Field label="Rule Name *">
             <input
               value={name}

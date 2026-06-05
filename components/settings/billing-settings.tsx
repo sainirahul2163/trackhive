@@ -12,14 +12,7 @@ interface Invoice {
   status: "Paid" | "Failed"
 }
 
-const MOCK_INVOICES: Invoice[] = [
-  { id: "inv_001", date: "Jun 1, 2026",  amount: "$149.00", status: "Paid" },
-  { id: "inv_002", date: "May 1, 2026",  amount: "$149.00", status: "Paid" },
-  { id: "inv_003", date: "Apr 1, 2026",  amount: "$149.00", status: "Paid" },
-  { id: "inv_004", date: "Mar 1, 2026",  amount: "$149.00", status: "Paid" },
-  { id: "inv_005", date: "Feb 1, 2026",  amount: "$149.00", status: "Paid" },
-  { id: "inv_006", date: "Jan 1, 2026",  amount: "$49.00",  status: "Paid" },
-]
+const INVOICES: Invoice[] = []
 
 const PLANS = [
   {
@@ -43,9 +36,9 @@ const PLANS = [
 ]
 
 const USAGE = [
-  { label: "Videos Tracked", used: 2840, max: 5000, color: "#7C3AED" },
-  { label: "Creators",        used: 64,   max: 100,  color: "#3b82f6" },
-  { label: "Seats Used",      used: 3,    max: 5,    color: "#10b981" },
+  { label: "Videos Tracked", used: 0, max: 5000, color: "#7C3AED" },
+  { label: "Creators",        used: 0, max: 100,  color: "#3b82f6" },
+  { label: "Seats Used",      used: 0, max: 5,    color: "#10b981" },
 ]
 
 function ProgressBar({ used, max, color }: { used: number; max: number; color: string }) {
@@ -188,8 +181,10 @@ export function BillingSettings() {
               <span key={h} style={{ fontSize: "11px", fontWeight: 600, color: "#52525b", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</span>
             ))}
           </div>
-          {MOCK_INVOICES.map((inv, i) => (
-            <div key={inv.id} style={{ display: "grid", gridTemplateColumns: "1fr 100px 80px 48px", gap: "12px", padding: "11px 0", alignItems: "center", borderBottom: i < MOCK_INVOICES.length - 1 ? "1px solid rgba(255,255,255,0.04)" : undefined }}>
+          {INVOICES.length === 0 ? (
+            <p style={{ fontSize: "13px", color: "#71717a", padding: "16px 0", textAlign: "center" }}>No invoices yet</p>
+          ) : INVOICES.map((inv, i) => (
+            <div key={inv.id} style={{ display: "grid", gridTemplateColumns: "1fr 100px 80px 48px", gap: "12px", padding: "11px 0", alignItems: "center", borderBottom: i < INVOICES.length - 1 ? "1px solid rgba(255,255,255,0.04)" : undefined }}>
               <span style={{ fontSize: "13px", color: "#a1a1aa" }}>{inv.date}</span>
               <span style={{ fontSize: "13px", fontWeight: 600, color: "#fafafa" }}>{inv.amount}</span>
               <span style={{ fontSize: "11px", fontWeight: 600, color: inv.status === "Paid" ? "#34d399" : "#f87171", backgroundColor: inv.status === "Paid" ? "rgba(52,211,153,0.1)" : "rgba(239,68,68,0.1)", padding: "2px 8px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>

@@ -20,81 +20,6 @@ interface Notification {
   link?: string
 }
 
-/* ─── Mock data ─────────────────────────────────────── */
-const INIT: Notification[] = [
-  {
-    id: "n1", type: "campaign", unread: true,
-    title: "Campaign milestone reached",
-    body: "\"Summer Drop 2025\" just hit 5M total views. Milestone bonus of $500 is now queued.",
-    time: "2 minutes ago",
-  },
-  {
-    id: "n2", type: "creator", unread: true,
-    title: "New content submitted",
-    body: "@jake_creates posted a new video in the Back to School campaign. Views are tracking above target.",
-    time: "1 hour ago",
-  },
-  {
-    id: "n3", type: "payment", unread: true,
-    title: "Payout processed",
-    body: "$2,400 payment to @maya.creates was processed successfully via PayPal.",
-    time: "3 hours ago",
-  },
-  {
-    id: "n4", type: "competitor", unread: false,
-    title: "Competitor spike detected",
-    body: "GlowBrand posted 4 videos in the last 48 hours — 2 are trending above 500K views.",
-    time: "5 hours ago",
-  },
-  {
-    id: "n5", type: "campaign", unread: false,
-    title: "Creator falling behind",
-    body: "@techbyleo is behind schedule on Collab Series Q3. Expected 3 videos, posted 1.",
-    time: "Yesterday",
-  },
-  {
-    id: "n6", type: "payment", unread: false,
-    title: "Invoice generated",
-    body: "Invoice #INV-0047 for $1,850 has been generated for @reels_anna.",
-    time: "Yesterday",
-  },
-  {
-    id: "n7", type: "creator", unread: false,
-    title: "Creator accepted invite",
-    body: "@lifewithkim accepted their creator invite and completed onboarding.",
-    time: "2 days ago",
-  },
-  {
-    id: "n8", type: "system", unread: false,
-    title: "Weekly digest ready",
-    body: "Your AI-powered competitor digest for the week of May 26 is ready to view.",
-    time: "2 days ago",
-  },
-  {
-    id: "n9", type: "campaign", unread: false,
-    title: "Campaign ended",
-    body: "\"Spring Collection\" campaign reached its end date. Final report is available.",
-    time: "3 days ago",
-  },
-  {
-    id: "n10", type: "payment", unread: false,
-    title: "Payout on hold",
-    body: "@creator_pro's payout of $980 is on hold — KYC verification required.",
-    time: "4 days ago",
-  },
-  {
-    id: "n11", type: "competitor", unread: false,
-    title: "New competitor creator flagged",
-    body: "@fitnessguru is now working with a competitor. Added to your watch list.",
-    time: "5 days ago",
-  },
-  {
-    id: "n12", type: "system", unread: false,
-    title: "Sync completed",
-    body: "All 24 tracked accounts have been successfully synced. Data is up to date.",
-    time: "1 week ago",
-  },
-]
 
 const TYPE_FILTERS: { value: NType | "all"; label: string }[] = [
   { value: "all",        label: "All" },
@@ -195,7 +120,7 @@ function EmptyState({ filtered }: { filtered: boolean }) {
 
 /* ─── Page ───────────────────────────────────────────── */
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>(INIT)
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [filter, setFilter]  = useState<NType | "all">("all")
   const [showUnread, setShowUnread] = useState(false)
 

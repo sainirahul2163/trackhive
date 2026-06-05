@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
   ArrowLeft, RefreshCw, ExternalLink, TrendingUp,
-  Eye, BarChart3, Video, ArrowUpRight, ArrowDownRight,
+  Eye, BarChart3, Video, ArrowUpRight,
   AlertCircle, DollarSign, Heart, MessageCircle, Share2,
   Bookmark, Plus, Users, Zap, ChevronDown,
 } from "lucide-react"
@@ -18,84 +18,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/lib/platform"
 import { VideoDetailDrawer } from "@/components/analytics/video-detail-drawer"
 import { fetchTrackedAccount, fetchTrackedVideos, fetchDailyStats, type DailyViewsPoint } from "@/lib/analytics-data"
-import type { TrackedAccount, TrackedVideo, Platform } from "@/types"
-
-/* ─── Deterministic mock helpers ────────────────────── */
-function seededRand(seed: number, min: number, max: number) {
-  const x = Math.sin(seed) * 10000
-  return Math.floor((x - Math.floor(x)) * (max - min + 1)) + min
-}
-
-function buildMockAccount(id: string): TrackedAccount {
-  const s = id.charCodeAt(0) + id.charCodeAt(id.length - 1)
-  const platforms: Platform[] = ["tiktok", "instagram", "youtube", "facebook"]
-  const names = ["maya.creates", "jakebreaks", "techbyleo", "reels_anna", "lifewithkim", "creator_pro"]
-  const username = names[seededRand(s, 0, names.length - 1)]
-  return {
-    id,
-    workspace_id: null,
-    platform: platforms[seededRand(s + 1, 0, 3)],
-    username,
-    display_name: username.replace(/[._]/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
-    avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-    profile_url: `https://tiktok.com/@${username}`,
-    follower_count: seededRand(s + 2, 80000, 2500000),
-    total_views: seededRand(s + 3, 5000000, 120000000),
-    avg_views: seededRand(s + 4, 180000, 4200000),
-    engagement_rate: (seededRand(s + 5, 30, 95) / 10),
-    last_synced_at: new Date(Date.now() - seededRand(s + 6, 60000, 3600000)).toISOString(),
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
-  }
-}
-
-function buildMockVideos(accountId: string, count = 12): TrackedVideo[] {
-  const captions = [
-    "POV: morning routine that changed my life ✨",
-    "This product literally broke the internet 🔥",
-    "Day in my life NYC — real talk",
-    "How I gained 100K in 30 days (no bs)",
-    "The hack nobody talks about 👀",
-    "Before vs after — you won't believe this",
-    "Storytime: what happened at the brand event",
-    "Rating every trendy product so you don't have to",
-    "The viral filter everyone is using rn",
-    "I tried being aesthetic for a week",
-    "Honest review after 60 days of using it",
-    "The collab that almost didn't happen",
-  ]
-  const s = accountId.charCodeAt(0)
-  return Array.from({ length: count }, (_, i) => ({
-    id: `${accountId}-v${i}`,
-    account_id: accountId,
-    platform: "tiktok" as Platform,
-    video_url: "#",
-    thumbnail_url: null,
-    caption: captions[i % captions.length],
-    views: seededRand(s + i * 7, 50000, 12000000),
-    likes: seededRand(s + i * 3, 2000, 800000),
-    comments: seededRand(s + i * 5, 100, 30000),
-    shares: seededRand(s + i * 11, 50, 80000),
-    saves: seededRand(s + i * 13, 100, 200000),
-    engagement_rate: seededRand(s + i * 2, 30, 120) / 10,
-    virality_score: seededRand(s + i * 4, 10, 98) / 10,
-    tags: [["ugc", "beauty", "review", "viral", "fyp", "tech"][i % 6]],
-    posted_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * (i * 3 + 1)).toISOString(),
-    created_at: new Date().toISOString(),
-  }))
-}
-
-function buildChartData(days: number, seed: number) {
-  return Array.from({ length: days }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (days - 1 - i))
-    const base = seededRand(seed + i, 200000, 1800000)
-    return {
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      views: base,
-      followers: seededRand(seed + i + 1, 500, 8000),
-    }
-  })
-}
+import { fetchCampaigns } from "@/lib/campaigns-data"
+import { useUser } from "@/lib/use-user"
+import type { TrackedAccount, TrackedVideo, Campaign } from "@/types"
 
 function buildEngagementData(videos: TrackedVideo[]) {
   const totals = videos.reduce((acc, v) => ({
@@ -113,12 +38,17 @@ function buildEngagementData(videos: TrackedVideo[]) {
   ]
 }
 
-function buildWeeklyData(seed: number) {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-  return days.map((day, i) => ({
-    day,
-    views: seededRand(seed + i * 3, 80000, 1200000),
-  }))
+function buildWeeklyData(videos: TrackedVideo[]) {
+  const totals = new Map<number, number>()
+  for (const v of videos) {
+    if (!v.posted_at) continue
+    const d = new Date(v.posted_at).getDay()
+    totals.set(d, (totals.get(d) ?? 0) + (v.views ?? 0))
+  }
+  return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => {
+    const dayIndex = (i + 1) % 7
+    return { day, views: totals.get(dayIndex) ?? 0 }
+  })
 }
 
 /* ─── Shared types ───────────────────────────────────── */
@@ -157,21 +87,27 @@ function DetailSkeleton() {
 }
 
 /* ─── Add to Campaign modal ──────────────────────────── */
-const MOCK_CAMPAIGNS = [
-  { id: "c1", name: "Summer Drop 2025", status: "Active" },
-  { id: "c2", name: "Back to School", status: "Active" },
-  { id: "c3", name: "Collab Series Q3", status: "Draft" },
-]
-
-function AddToCampaignModal({ onClose, creatorName }: { onClose: () => void; creatorName: string }) {
+function AddToCampaignModal({ onClose, creatorName, userId }: { onClose: () => void; creatorName: string; userId?: string }) {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState("")
   const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    fetchCampaigns(userId)
+      .then(data => setCampaigns(data.filter(c => c.status === "active" || c.status === "draft")))
+      .catch(() => setCampaigns([]))
+      .finally(() => setLoading(false))
+  }, [userId])
 
   function handleAdd() {
     if (!selected) return
     setDone(true)
     setTimeout(onClose, 1200)
   }
+
+  const statusLabel = (s: Campaign["status"]) =>
+    s.charAt(0).toUpperCase() + s.slice(1)
 
   return (
     <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "24px" }}>
@@ -189,25 +125,34 @@ function AddToCampaignModal({ onClose, creatorName }: { onClose: () => void; cre
               <h3 className="text-[15px] font-semibold text-white">Add to Campaign</h3>
               <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 transition-colors text-lg leading-none">×</button>
             </div>
-            <p className="text-xs text-zinc-500 mb-4">Add <span className="text-zinc-300 font-medium">{creatorName}</span> to an active campaign.</p>
-            <div className="space-y-2 mb-5">
-              {MOCK_CAMPAIGNS.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelected(c.id)}
-                  className="w-full text-left px-3 py-2.5 rounded-lg border transition-all"
-                  style={{
-                    backgroundColor: selected === c.id ? "rgba(124,58,237,0.1)" : "rgba(255,255,255,0.03)",
-                    borderColor: selected === c.id ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.07)",
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-zinc-200 font-medium">{c.name}</span>
-                    <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{c.status}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
+            <p className="text-xs text-zinc-500 mb-4">Add <span className="text-zinc-300 font-medium">{creatorName}</span> to a campaign.</p>
+            {loading ? (
+              <p className="text-sm text-zinc-500 py-4 text-center">Loading campaigns…</p>
+            ) : campaigns.length === 0 ? (
+              <div className="text-center py-6 mb-4">
+                <p className="text-sm text-zinc-400 mb-3">No campaigns yet</p>
+                <Link href="/campaigns/new" className="text-xs text-purple-400 hover:text-purple-300">Create a campaign →</Link>
+              </div>
+            ) : (
+              <div className="space-y-2 mb-5">
+                {campaigns.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelected(c.id)}
+                    className="w-full text-left px-3 py-2.5 rounded-lg border transition-all"
+                    style={{
+                      backgroundColor: selected === c.id ? "rgba(124,58,237,0.1)" : "rgba(255,255,255,0.03)",
+                      borderColor: selected === c.id ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.07)",
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-zinc-200 font-medium">{c.name}</span>
+                      <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{statusLabel(c.status)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               onClick={handleAdd}
               disabled={!selected}
@@ -223,9 +168,9 @@ function AddToCampaignModal({ onClose, creatorName }: { onClose: () => void; cre
 }
 
 /* ─── Stat card ──────────────────────────────────────── */
-function StatCard({ label, value, icon: Icon, color, bg, change, up }: {
+function StatCard({ label, value, icon: Icon, color, bg }: {
   label: string; value: string; icon: React.ElementType
-  color: string; bg: string; change: string; up: boolean
+  color: string; bg: string
 }) {
   return (
     <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-4">
@@ -236,11 +181,6 @@ function StatCard({ label, value, icon: Icon, color, bg, change, up }: {
         </div>
       </div>
       <p className="text-xl font-bold text-white">{value}</p>
-      <div className="flex items-center gap-1 mt-1">
-        {up ? <ArrowUpRight className="w-3 h-3 text-emerald-400" /> : <ArrowDownRight className="w-3 h-3 text-red-400" />}
-        <span className={`text-xs font-medium ${up ? "text-emerald-400" : "text-red-400"}`}>{change}</span>
-        <span className="text-xs text-zinc-600">vs last period</span>
-      </div>
     </div>
   )
 }
@@ -267,6 +207,7 @@ function formatDate(iso: string | null) {
 export default function AccountDetailPage() {
   const params = useParams()
   const id = params.id as string
+  const { user } = useUser()
 
   const [account,    setAccount]    = useState<TrackedAccount | null>(null)
   const [videos,     setVideos]     = useState<TrackedVideo[]>([])
@@ -291,12 +232,12 @@ export default function AccountDetailPage() {
         fetchDailyStats(id, 90),
       ])
       setAccount(acct)
-      setVideos(vids.length > 0 ? vids : buildMockVideos(id))
+      setVideos(vids)
       setDailyStats(daily)
     } catch {
-      // Supabase not available yet — fall back to rich mock data
-      setAccount(buildMockAccount(id))
-      setVideos(buildMockVideos(id))
+      setError("Failed to load account")
+      setAccount(null)
+      setVideos([])
       setDailyStats([])
     } finally {
       setLoading(false)
@@ -319,21 +260,17 @@ export default function AccountDetailPage() {
     }
   }
 
-  // Build chart data: prefer real daily stats, fall back to mock
-  const chartData = useMemo(() => {
-    if (dailyStats.length > 0) {
-      return dailyStats.map((d) => ({
-        date:      new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        views:     d.views,
-        followers: 0,
-      }))
-    }
-    return buildChartData(90, id.charCodeAt(0))
-  }, [dailyStats, id])
+  const chartData = useMemo(() =>
+    dailyStats.map((d) => ({
+      date: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      views: d.views,
+      followers: 0,
+    })),
+  [dailyStats])
 
   const displayData = chartData.slice(-activeDays)
   const engagementData = useMemo(() => buildEngagementData(videos), [videos])
-  const weeklyData = useMemo(() => buildWeeklyData(id.charCodeAt(0)), [id])
+  const weeklyData = useMemo(() => buildWeeklyData(videos), [videos])
 
   const sortedVideos = useMemo(() => [...videos].sort((a, b) => {
     if (videoSort === "views")    return (b.views ?? 0) - (a.views ?? 0)
@@ -371,10 +308,10 @@ export default function AccountDetailPage() {
   const estMonthly = (((account.avg_views ?? 0) * 4 * parseFloat(estCpm)) / 1000).toFixed(0)
 
   const statCards = [
-    { label: "Total Views",       value: formatNumber(account.total_views ?? 0),  icon: Eye,        color: "text-blue-400",    bg: "bg-blue-500/10",    change: "+18.2%", up: true  },
-    { label: "Avg Views / Video", value: formatNumber(account.avg_views ?? 0),     icon: BarChart3,  color: "text-purple-400",  bg: "bg-purple-500/10",  change: "+5.4%",  up: true  },
-    { label: "Engagement Rate",   value: `${account.engagement_rate.toFixed(1)}%`, icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10", change: "-0.3%",  up: false },
-    { label: "Est. CPM",          value: `$${estCpm}`,                             icon: DollarSign, color: "text-amber-400",   bg: "bg-amber-500/10",   change: "+$1.20", up: true  },
+    { label: "Total Views",       value: formatNumber(account.total_views ?? 0),  icon: Eye,        color: "text-blue-400",    bg: "bg-blue-500/10"    },
+    { label: "Avg Views / Video", value: formatNumber(account.avg_views ?? 0),     icon: BarChart3,  color: "text-purple-400",  bg: "bg-purple-500/10"  },
+    { label: "Engagement Rate",   value: `${account.engagement_rate.toFixed(1)}%`, icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    { label: "Est. CPM",          value: `$${estCpm}`,                             icon: DollarSign, color: "text-amber-400",   bg: "bg-amber-500/10"   },
   ]
 
   const PIE_COLORS = ["#a855f7", "#3b82f6", "#10b981", "#f59e0b"]
@@ -471,6 +408,13 @@ export default function AccountDetailPage() {
               ))}
             </div>
           </div>
+          {displayData.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-[220px] text-center">
+              <BarChart3 className="w-8 h-8 text-zinc-700 mb-2" />
+              <p className="text-sm text-zinc-500">No view history yet</p>
+              <p className="text-xs text-zinc-600 mt-1">Sync this account to start collecting daily stats</p>
+            </div>
+          ) : (
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={displayData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
               <defs>
@@ -490,6 +434,7 @@ export default function AccountDetailPage() {
               />
             </AreaChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         {/* Engagement breakdown donut */}
@@ -527,6 +472,9 @@ export default function AccountDetailPage() {
             <p className="text-xs text-zinc-500 mt-0.5">Which days drive the most performance</p>
           </div>
         </div>
+        {videos.length === 0 ? (
+          <p className="text-sm text-zinc-500 text-center py-8">Post videos to see weekly patterns</p>
+        ) : (
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={weeklyData} margin={{ top: 0, right: 5, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
@@ -536,6 +484,7 @@ export default function AccountDetailPage() {
             <Bar dataKey="views" fill="#7C3AED" radius={[3, 3, 0, 0]} opacity={0.8} />
           </BarChart>
         </ResponsiveContainer>
+        )}
       </div>
 
       {/* ── Top video spotlight ─────────────────────────── */}
@@ -619,6 +568,15 @@ export default function AccountDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.03]">
+              {sortedVideos.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-16 text-center">
+                    <Video className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                    <p className="text-sm text-zinc-400">No videos tracked yet</p>
+                    <p className="text-xs text-zinc-600 mt-1">Sync this account to pull in content</p>
+                  </td>
+                </tr>
+              )}
               {sortedVideos.map((video) => {
                 const vl = viralityLabel(video.virality_score)
                 return (
@@ -677,6 +635,7 @@ export default function AccountDetailPage() {
         <AddToCampaignModal
           onClose={() => setCampaignModalOpen(false)}
           creatorName={account.display_name ?? account.username}
+          userId={user?.id}
         />
       )}
     </div>

@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
+import { fetchCampaigns } from "@/lib/campaigns-data"
+import { useUser } from "@/lib/use-user"
 import {
   Search, X, Send, ChevronDown, Star, Eye, TrendingUp,
   ExternalLink, CheckCircle2, Filter, Users, DollarSign,
@@ -37,164 +39,7 @@ interface Campaign {
   deadline: string
 }
 
-// ── Mock Data ─────────────────────────────────────────────────
-const MOCK_CREATORS: CreatorProfile[] = [
-  {
-    id: "cr1", name: "Alex Rivera", handle: "@alexrivera", niche: "Fitness",
-    location: "Los Angeles, CA", bio: "Fitness & lifestyle creator sharing real routines, honest reviews, and everyday motivation.",
-    platforms: [
-      { platform: "tiktok",    handle: "@alexrivera",     followers: 1_240_000 },
-      { platform: "instagram", handle: "@alexrivera.fit", followers: 485_000   },
-      { platform: "youtube",   handle: "Alex Rivera",     followers: 312_000   },
-    ],
-    avgViews: 920_000, engagementRate: 7.4, viralityScore: 9.1,
-    totalEarned: 24_500, pastBrands: ["Nike", "Gymshark", "AuraBrand"],
-    topContent: ["Morning routine reels", "Product reviews", "Workout challenges"],
-    responseTime: "< 2 hrs", rating: 4.9, inviteSent: false,
-  },
-  {
-    id: "cr2", name: "Priya Sharma", handle: "@priyabeauty", niche: "Beauty",
-    location: "New York, NY", bio: "Clean beauty advocate. Honest skincare reviews, makeup tutorials, and glow-up content.",
-    platforms: [
-      { platform: "instagram", handle: "@priyabeauty",   followers: 2_100_000 },
-      { platform: "tiktok",    handle: "@priya.skincare", followers: 890_000   },
-    ],
-    avgViews: 1_400_000, engagementRate: 8.2, viralityScore: 9.4,
-    totalEarned: 38_200, pastBrands: ["Fenty Beauty", "Glossier", "LumaGlow"],
-    topContent: ["Skincare routines", "Get ready with me", "Product dupes"],
-    responseTime: "< 4 hrs", rating: 5.0, inviteSent: false,
-  },
-  {
-    id: "cr3", name: "Jordan Lee", handle: "@jordantech", niche: "Tech",
-    location: "San Francisco, CA", bio: "Making tech accessible for everyone. Unboxings, deep dives, and honest takes.",
-    platforms: [
-      { platform: "youtube",   handle: "Jordan Lee Tech",  followers: 1_800_000 },
-      { platform: "tiktok",    handle: "@jordanletech",    followers: 620_000   },
-    ],
-    avgViews: 780_000, engagementRate: 5.9, viralityScore: 8.0,
-    totalEarned: 29_100, pastBrands: ["NexGear", "Sony", "Apple"],
-    topContent: ["Unboxing videos", "Comparison reviews", "Tech news commentary"],
-    responseTime: "< 6 hrs", rating: 4.8, inviteSent: false,
-  },
-  {
-    id: "cr4", name: "Sofia Chen", handle: "@sofiastyle", niche: "Fashion",
-    location: "Miami, FL", bio: "Sustainable fashion creator. Thrift finds, outfit builds, and conscious style guides.",
-    platforms: [
-      { platform: "tiktok",    handle: "@sofiastyle",      followers: 3_200_000 },
-      { platform: "instagram", handle: "@sofia.chen.style", followers: 1_400_000 },
-    ],
-    avgViews: 2_100_000, engagementRate: 9.1, viralityScore: 9.7,
-    totalEarned: 61_000, pastBrands: ["Zara", "ASOS", "Depop"],
-    topContent: ["GRWM videos", "Thrift hauls", "Style challenges"],
-    responseTime: "< 1 hr", rating: 4.9, inviteSent: false,
-  },
-  {
-    id: "cr5", name: "Marco Bianchi", handle: "@marcoeats", niche: "Food",
-    location: "Chicago, IL", bio: "Home cook turned content creator. Recipes, restaurant reviews, and foodie adventures.",
-    platforms: [
-      { platform: "instagram", handle: "@marcoeats",  followers: 890_000 },
-      { platform: "youtube",   handle: "Marco Eats",  followers: 540_000 },
-      { platform: "tiktok",    handle: "@marcofoods", followers: 720_000 },
-    ],
-    avgViews: 540_000, engagementRate: 6.7, viralityScore: 7.8,
-    totalEarned: 18_400, pastBrands: ["HelloFresh", "Rao's", "KitchenAid"],
-    topContent: ["Recipe videos", "Restaurant tours", "Cooking tips"],
-    responseTime: "< 8 hrs", rating: 4.7, inviteSent: false,
-  },
-  {
-    id: "cr6", name: "Yuki Tanaka", handle: "@yukifinance", niche: "Finance",
-    location: "Austin, TX", bio: "Personal finance for millennials. Investing basics, budget hacks, and money mindset.",
-    platforms: [
-      { platform: "youtube",   handle: "Yuki Finance", followers: 980_000 },
-      { platform: "tiktok",    handle: "@yukifinance", followers: 1_100_000 },
-    ],
-    avgViews: 680_000, engagementRate: 6.3, viralityScore: 8.3,
-    totalEarned: 22_700, pastBrands: ["Robinhood", "Betterment", "Acorns"],
-    topContent: ["Investing guides", "Budget challenges", "Finance explainers"],
-    responseTime: "< 3 hrs", rating: 4.8, inviteSent: false,
-  },
-  {
-    id: "cr7", name: "Ama Owusu", handle: "@amatravels", niche: "Travel",
-    location: "London, UK", bio: "Budget travel hacker. Exploring the world on $50/day, solo travel tips, and hidden gems.",
-    platforms: [
-      { platform: "instagram", handle: "@amatravels",      followers: 1_600_000 },
-      { platform: "tiktok",    handle: "@ama.adventures",  followers: 980_000   },
-      { platform: "youtube",   handle: "Ama Travels",      followers: 670_000   },
-    ],
-    avgViews: 860_000, engagementRate: 7.9, viralityScore: 8.7,
-    totalEarned: 31_500, pastBrands: ["Airbnb", "Booking.com", "Osprey"],
-    topContent: ["City guides", "Budget travel hacks", "Solo travel vlogs"],
-    responseTime: "< 5 hrs", rating: 4.9, inviteSent: false,
-  },
-  {
-    id: "cr8", name: "Dev Patel", handle: "@devgames", niche: "Gaming",
-    location: "Toronto, CA", bio: "Variety gamer with a focus on indie titles and game design breakdowns.",
-    platforms: [
-      { platform: "youtube",   handle: "Dev Plays",  followers: 2_400_000 },
-      { platform: "tiktok",    handle: "@devgames",  followers: 1_300_000 },
-    ],
-    avgViews: 1_900_000, engagementRate: 7.2, viralityScore: 8.9,
-    totalEarned: 47_800, pastBrands: ["Razer", "G-Fuel", "Discord"],
-    topContent: ["Game reviews", "Let's plays", "Gaming news commentary"],
-    responseTime: "< 2 hrs", rating: 4.8, inviteSent: false,
-  },
-  {
-    id: "cr9", name: "Lena Muller", handle: "@lenafit", niche: "Fitness",
-    location: "Berlin, DE", bio: "Women's strength training and mindful movement. No-BS fitness content that actually works.",
-    platforms: [
-      { platform: "instagram", handle: "@lenafit",       followers: 720_000 },
-      { platform: "tiktok",    handle: "@lena.strength", followers: 440_000 },
-    ],
-    avgViews: 390_000, engagementRate: 8.8, viralityScore: 7.9,
-    totalEarned: 14_200, pastBrands: ["Lululemon", "FitEdge", "MyProtein"],
-    topContent: ["Strength training tutorials", "Form checks", "Mindset content"],
-    responseTime: "< 4 hrs", rating: 4.7, inviteSent: false,
-  },
-  {
-    id: "cr10", name: "Raj Kapoor", handle: "@rajtechtalk", niche: "Tech",
-    location: "Bangalore, IN", bio: "AI, startups, and product reviews. Making complex tech digestible for everyday users.",
-    platforms: [
-      { platform: "youtube",   handle: "Raj Tech Talk", followers: 890_000   },
-      { platform: "tiktok",    handle: "@rajtechtalk",  followers: 560_000   },
-      { platform: "instagram", handle: "@rajkapoortech", followers: 310_000   },
-    ],
-    avgViews: 620_000, engagementRate: 6.1, viralityScore: 7.6,
-    totalEarned: 19_300, pastBrands: ["Samsung", "NexGear", "1Password"],
-    topContent: ["AI explainers", "Startup breakdowns", "Gear reviews"],
-    responseTime: "< 6 hrs", rating: 4.6, inviteSent: false,
-  },
-  {
-    id: "cr11", name: "Camille Dupont", handle: "@camillebeaute", niche: "Beauty",
-    location: "Paris, FR", bio: "French beauty secrets, minimalist routines, and luxury dupes on a real budget.",
-    platforms: [
-      { platform: "tiktok",    handle: "@camillebeaute",  followers: 4_100_000 },
-      { platform: "instagram", handle: "@camille.dupont", followers: 2_200_000 },
-    ],
-    avgViews: 3_200_000, engagementRate: 10.2, viralityScore: 9.8,
-    totalEarned: 89_000, pastBrands: ["Lancôme", "Charlotte Tilbury", "NARS"],
-    topContent: ["French girl routines", "Luxury dupes", "Minimalist beauty"],
-    responseTime: "< 1 hr", rating: 5.0, inviteSent: false,
-  },
-  {
-    id: "cr12", name: "Tyler Brooks", handle: "@tyleroutdoors", niche: "Travel",
-    location: "Denver, CO", bio: "Overlanding, hiking, and van life adventures across North America.",
-    platforms: [
-      { platform: "youtube",   handle: "Tyler Outdoors",   followers: 1_100_000 },
-      { platform: "instagram", handle: "@tyler.outdoors",  followers: 690_000   },
-    ],
-    avgViews: 720_000, engagementRate: 5.8, viralityScore: 7.4,
-    totalEarned: 21_600, pastBrands: ["REI", "Osprey", "BioLite"],
-    topContent: ["Van life vlogs", "Hiking guides", "Gear reviews"],
-    responseTime: "< 12 hrs", rating: 4.7, inviteSent: false,
-  },
-]
-
-const MOCK_CAMPAIGNS: Campaign[] = [
-  { id: "camp1", name: "Summer Drop 2025",       budget: 5000, deadline: "2025-07-15" },
-  { id: "camp2", name: "Back to School Fitness", budget: 3000, deadline: "2025-08-10" },
-  { id: "camp3", name: "Tech Unboxing Series",   budget: 8000, deadline: "2025-09-01" },
-  { id: "camp4", name: "Holiday Glow Campaign",  budget: 6500, deadline: "2025-12-15" },
-]
+const CREATORS: CreatorProfile[] = []
 
 // ── Helpers ────────────────────────────────────────────────────
 const PLATFORM_CFG: Record<Platform, { label: string; color: string; bg: string }> = {
@@ -238,10 +83,11 @@ function StarRating({ rating }: { rating: number }) {
 // ── Invite Modal ───────────────────────────────────────────────
 interface InviteModalProps {
   creator: CreatorProfile
+  campaigns: Campaign[]
   onClose: () => void
   onSend: (creatorId: string, campaignId: string, message: string) => void
 }
-function InviteModal({ creator, onClose, onSend }: InviteModalProps) {
+function InviteModal({ creator, campaigns, onClose, onSend }: InviteModalProps) {
   const [selectedCampaign, setSelectedCampaign] = useState("")
   const [message, setMessage] = useState(
     `Hi ${creator.name.split(" ")[0]},\n\nWe love your content and think you'd be a perfect fit for our upcoming campaign. Would you be interested in collaborating?\n\nLooking forward to hearing from you!`
@@ -257,7 +103,7 @@ function InviteModal({ creator, onClose, onSend }: InviteModalProps) {
     }, 900)
   }
 
-  const camp = MOCK_CAMPAIGNS.find(c => c.id === selectedCampaign)
+  const camp = campaigns.find(c => c.id === selectedCampaign)
 
   return (
     <>
@@ -283,7 +129,7 @@ function InviteModal({ creator, onClose, onSend }: InviteModalProps) {
                 <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)}
                   style={{ width: "100%", padding: "10px 32px 10px 12px", borderRadius: "9px", border: `1px solid ${selectedCampaign ? "rgba(124,58,237,0.3)" : "rgba(255,255,255,0.08)"}`, backgroundColor: "#0d0d0d", color: selectedCampaign ? "#fafafa" : "#52525b", fontSize: "13px", outline: "none", appearance: "none", cursor: "pointer", boxSizing: "border-box" }}>
                   <option value="">Choose a campaign…</option>
-                  {MOCK_CAMPAIGNS.map(c => (
+                  {campaigns.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
@@ -459,6 +305,8 @@ function ProfileDrawer({ creator, onClose, onInvite, inviteSent }: ProfileDrawer
 
 // ── Main Page ─────────────────────────────────────────────────
 export default function DiscoveryPage() {
+  const { user } = useUser()
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [search, setSearch]               = useState("")
   const [selectedNiche, setSelectedNiche] = useState<Niche | "All">("All")
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | "all">("all")
@@ -470,8 +318,19 @@ export default function DiscoveryPage() {
   const [invitedIds, setInvitedIds]       = useState<Set<string>>(new Set())
   const [showFilters, setShowFilters]     = useState(false)
 
+  useEffect(() => {
+    fetchCampaigns(user?.id).then(data =>
+      setCampaigns(data.map(c => ({
+        id: c.id,
+        name: c.name,
+        budget: c.total_payout ?? 0,
+        deadline: c.end_date ?? "",
+      })))
+    ).catch(() => setCampaigns([]))
+  }, [user?.id])
+
   const filtered = useMemo(() => {
-    let list = MOCK_CREATORS.filter(c => {
+    let list = CREATORS.filter(c => {
       if (selectedNiche !== "All" && c.niche !== selectedNiche) return false
       if (selectedPlatform !== "all" && !c.platforms.some(p => p.platform === selectedPlatform)) return false
       if (totalFollowers(c) < minFollowers * 1_000) return false
@@ -515,7 +374,7 @@ export default function DiscoveryPage() {
         <div>
           <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#fafafa" }}>Creator Discovery</h1>
           <p style={{ fontSize: "13px", color: "#71717a", marginTop: "3px" }}>
-            Find the right creators for your campaigns · {MOCK_CREATORS.length} creators available
+            Find the right creators for your campaigns · {CREATORS.length} creators available
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
@@ -638,8 +497,14 @@ export default function DiscoveryPage() {
       {filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "72px 24px", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.06)", backgroundColor: "#111111" }}>
           <MessageSquare style={{ width: "28px", height: "28px", color: "#52525b", margin: "0 auto 12px" }} />
-          <p style={{ fontSize: "15px", fontWeight: 700, color: "#fafafa", marginBottom: "6px" }}>No creators match these filters</p>
-          <p style={{ fontSize: "13px", color: "#71717a" }}>Try widening your search or adjusting the filters above.</p>
+          <p style={{ fontSize: "15px", fontWeight: 700, color: "#fafafa", marginBottom: "6px" }}>
+            {CREATORS.length === 0 ? "No creators in discovery yet" : "No creators match these filters"}
+          </p>
+          <p style={{ fontSize: "13px", color: "#71717a" }}>
+            {CREATORS.length === 0
+              ? "Creator profiles will appear here once you build your network."
+              : "Try widening your search or adjusting the filters above."}
+          </p>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px,1fr))", gap: "12px" }}>
@@ -731,6 +596,7 @@ export default function DiscoveryPage() {
       {invitingCreator && (
         <InviteModal
           creator={invitingCreator}
+          campaigns={campaigns}
           onClose={() => setInvitingCreator(null)}
           onSend={creatorId => { handleInviteSend(creatorId); setInvitingCreator(null) }}
         />

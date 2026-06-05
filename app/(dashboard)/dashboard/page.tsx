@@ -103,45 +103,48 @@ export default function DashboardPage() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     )
 
-    const [accountsRes, campaignsRes, payoutsRes, videosRes, dailyRes] = await Promise.allSettled([
-      // Tracked accounts for this workspace
-      supabase
-        .from("tracked_accounts")
-        .select("id, total_views, last_synced_at")
-        .or(`workspace_id.eq.${userId},workspace_id.is.null`),
+    const accountsRes = await supabase
+      .from("tracked_accounts")
+      .select("id, total_views, last_synced_at")
+      .eq("workspace_id", userId)
 
-      // Active campaigns
+    const accountIds = (accountsRes.data ?? []).map((a: { id: string }) => a.id)
+
+    const [campaignsRes, payoutsRes, videosRes, dailyRes] = await Promise.allSettled([
       supabase
         .from("campaigns")
         .select("id, status")
-        .or(`workspace_id.eq.${userId},workspace_id.is.null`)
+        .eq("workspace_id", userId)
         .eq("status", "active"),
 
-      // Pending payouts
       supabase
         .from("payouts")
         .select("amount")
-        .or(`workspace_id.eq.${userId},workspace_id.is.null`)
+        .eq("workspace_id", userId)
         .in("status", ["pending", "approved"]),
 
-      // Top videos
-      supabase
-        .from("tracked_videos")
-        .select("id, caption, views, platform, tracked_accounts(username, workspace_id)")
-        .order("views", { ascending: false })
-        .limit(5),
+      accountIds.length > 0
+        ? supabase
+            .from("tracked_videos")
+            .select("id, caption, views, platform, tracked_accounts(username)")
+            .in("account_id", accountIds)
+            .order("views", { ascending: false })
+            .limit(5)
+        : Promise.resolve({ data: [], error: null }),
 
-      // Daily views (last 30 days across all accounts)
-      supabase
-        .from("video_daily_stats")
-        .select("date, views")
-        .gte("date", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
-        .order("date", { ascending: true }),
+      accountIds.length > 0
+        ? supabase
+            .from("video_daily_stats")
+            .select("date, views")
+            .in("account_id", accountIds)
+            .gte("date", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
+            .order("date", { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
     ])
 
     // ── Metrics ──
     interface AccountRow { id: string; total_views: number; last_synced_at: string | null }
-    const accounts = accountsRes.status === "fulfilled" ? (accountsRes.value.data ?? []) as AccountRow[] : []
+    const accounts = (accountsRes.data ?? []) as AccountRow[]
     const totalViews = accounts.reduce((s, a) => s + (a.total_views ?? 0), 0)
 
     const activeCampaigns = campaignsRes.status === "fulfilled"

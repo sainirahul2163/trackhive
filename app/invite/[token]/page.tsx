@@ -5,12 +5,13 @@ import { useParams } from "next/navigation"
 import {
   Zap, CheckCircle2, User, Mail, CreditCard,
   DollarSign, Shield, ArrowRight, Loader2,
-  TrendingUp, Video, Star,
+  TrendingUp, Video, Star, AlertCircle,
 } from "lucide-react"
+import { createBrowserClient } from "@supabase/ssr"
 
-type Step = "loading" | "welcome" | "profile" | "payment" | "done"
+type Step = "loading" | "error" | "welcome" | "profile" | "payment" | "done"
 
-interface MockInvite {
+interface InviteData {
   brand: string
   campaign: string
   baseFee: number
@@ -20,15 +21,7 @@ interface MockInvite {
   paymentMethods: string[]
 }
 
-const MOCK_INVITE: MockInvite = {
-  brand: "ProteinPro",
-  campaign: "Summer Drop 2025",
-  baseFee: 200,
-  cpmRate: 4.5,
-  milestoneBonus: 500,
-  milestoneViews: 500000,
-  paymentMethods: ["PayPal", "Bank Transfer", "Wise"],
-}
+const PAYMENT_METHOD_OPTIONS = ["PayPal", "Bank Transfer", "Wise"]
 
 /* ─── Progress bar ──────────────────────────────────── */
 const STEPS: { id: Step; label: string }[] = [
@@ -100,7 +93,8 @@ function Field({ label, type = "text", placeholder, value, onChange }: {
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>()
   const [step, setStep] = useState<Step>("loading")
-  const [invite, setInvite] = useState<MockInvite | null>(null)
+  const [invite, setInvite] = useState<InviteData | null>(null)
+  const [errorMessage, setErrorMessage] = useState("")
 
   // Form state
   const [name, setName]         = useState("")
@@ -111,12 +105,51 @@ export default function InvitePage() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    // Simulate token validation
-    const t = setTimeout(() => {
-      setInvite(MOCK_INVITE)
+    if (!token) {
+      setErrorMessage("Invalid invite link.")
+      setStep("error")
+      return
+    }
+
+    async function loadInvite() {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      const { data, error } = await supabase
+        .from("creators")
+        .select("id, name, invite_accepted")
+        .eq("invite_token", token)
+        .maybeSingle()
+
+      if (error || !data) {
+        setErrorMessage(error?.message ?? "This invite link is invalid or has expired.")
+        setStep("error")
+        return
+      }
+
+      if (data.invite_accepted) {
+        setErrorMessage("This invite has already been accepted.")
+        setStep("error")
+        return
+      }
+
+      setInvite({
+        brand: "Campaign sponsor",
+        campaign: "Creator campaign",
+        baseFee: 0,
+        cpmRate: 0,
+        milestoneBonus: 0,
+        milestoneViews: 0,
+        paymentMethods: PAYMENT_METHOD_OPTIONS,
+      })
       setStep("welcome")
-    }, 1200)
-    return () => clearTimeout(t)
+    }
+
+    loadInvite().catch(() => {
+      setErrorMessage("Unable to load invite. Please try again later.")
+      setStep("error")
+    })
   }, [token])
 
   async function handleProfileNext() {
@@ -133,6 +166,41 @@ export default function InvitePage() {
   }
 
   const stepIndex = STEPS.findIndex(s => s.id === step)
+
+  if (step === "error") {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px", gap: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+          <div style={{ width: "28px", height: "28px", borderRadius: "7px", background: "linear-gradient(135deg,#7C3AED,#6D28D9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Zap style={{ width: "15px", height: "15px", color: "white" }} />
+          </div>
+          <span style={{ fontSize: "16px", fontWeight: 700, color: "#fafafa" }}>TrackHive</span>
+        </div>
+        <Card>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: "56px", height: "56px", borderRadius: "14px", backgroundColor: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <AlertCircle style={{ width: "26px", height: "26px", color: "#f87171" }} />
+            </div>
+            <h1 style={{ fontSize: "20px", fontWeight: 700, color: "#fafafa", marginBottom: "8px" }}>Invite not found</h1>
+            <p style={{ fontSize: "14px", color: "#71717a", lineHeight: 1.6, marginBottom: "24px" }}>
+              {errorMessage || "This invite link is invalid or has expired. Contact the brand that sent you the invite for a new link."}
+            </p>
+            <a
+              href="/login"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "8px",
+                padding: "12px 24px", borderRadius: "10px",
+                backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                color: "#a1a1aa", fontSize: "14px", fontWeight: 500, textDecoration: "none",
+              }}
+            >
+              Go to login
+            </a>
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   /* Loading */
   if (step === "loading") {

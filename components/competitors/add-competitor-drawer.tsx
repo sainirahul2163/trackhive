@@ -87,32 +87,7 @@ export function AddCompetitorDrawer({ open, onClose, onAdd }: AddCompetitorDrawe
       setSaved(true)
       setTimeout(() => { setSaved(false); handleClose() }, 1200)
     } catch {
-      // Optimistic: build mock competitor and add it
-      const mockComp: Competitor = {
-        id: `comp-${Date.now()}`,
-        workspace_id: null,
-        name: name.trim(),
-        website: website.trim() || null,
-        logo_url: null,
-        created_at: new Date().toISOString(),
-        accounts: Object.entries(handles)
-          .filter(([, v]) => v.trim())
-          .map(([platform, username], i) => ({
-            id: `ca-new-${i}`,
-            competitor_id: `comp-${Date.now()}`,
-            platform: platform as Platform,
-            username: username.trim().startsWith("@") ? username.trim() : `@${username.trim()}`,
-            avatar_url: null,
-            follower_count: 0,
-            total_views: 0,
-            avg_views: 0,
-            posting_frequency: 0,
-            created_at: new Date().toISOString(),
-          })),
-      }
-      onAdd(mockComp)
-      setSaved(true)
-      setTimeout(() => { setSaved(false); handleClose() }, 1200)
+      setError("Failed to add competitor. Please try again.")
     } finally {
       setSaving(false)
     }

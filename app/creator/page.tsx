@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   Eye, Megaphone, DollarSign, Clock,
-  ArrowUpRight, ArrowDownRight, TrendingUp,
+  TrendingUp,
   CheckCircle2, Flame, Bell, Zap, ChevronRight,
   ExternalLink,
 } from "lucide-react"
@@ -13,63 +13,32 @@ import {
 } from "recharts"
 import { createBrowserClient } from "@supabase/ssr"
 
-// ── Mock data ──────────────────────────────────────────────────
-const VIEWS_DATA = Array.from({ length: 30 }, (_, i) => {
-  const d = new Date(); d.setDate(d.getDate() - (29 - i))
-  const base = 40000 + Math.sin(i * 0.4) * 20000 + i * 3000
-  return {
-    date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    views: Math.round(Math.max(5000, base + (Math.random() * 15000 - 7500))),
-  }
-})
+// ── Types ──────────────────────────────────────────────────────
+type CampaignStatus = "active" | "pending" | "completed"
 
-const MOCK_CAMPAIGNS = [
-  {
-    id: "c1",
-    brand: "AuraBrand",
-    brandInitials: "AB",
-    brandColor: "#7C3AED",
-    name: "Summer Drop 2025",
-    brief: "Create 3 authentic product review videos showcasing the new summer skincare line. Focus on before/after results and natural ingredients.",
-    deadline: "Jun 30, 2025",
-    daysLeft: 14,
-    status: "active" as const,
-    videosRequired: 3,
-    videosPosted: 1,
-    earnings: "$450",
-    potential: "$1,200",
-  },
-  {
-    id: "c2",
-    brand: "FitEdge",
-    brandInitials: "FE",
-    brandColor: "#10b981",
-    name: "Back to School Fitness",
-    brief: "Share your back-to-school workout routine featuring FitEdge resistance bands. Show exercises and quick setup tips for students.",
-    deadline: "Jul 15, 2025",
-    daysLeft: 29,
-    status: "active" as const,
-    videosRequired: 2,
-    videosPosted: 0,
-    earnings: "$0",
-    potential: "$600",
-  },
-  {
-    id: "c3",
-    brand: "NexGear",
-    brandInitials: "NG",
-    brandColor: "#3b82f6",
-    name: "Tech Unboxing Series",
-    brief: "Review NexGear's latest audio accessories. First impressions, sound quality test, and comparison to alternatives.",
-    deadline: "Aug 1, 2025",
-    daysLeft: 46,
-    status: "pending" as const,
-    videosRequired: 2,
-    videosPosted: 0,
-    earnings: "$0",
-    potential: "$400",
-  },
-]
+interface CreatorCampaign {
+  id: string
+  brand: string
+  brandInitials: string
+  brandColor: string
+  name: string
+  brief: string
+  deadline: string
+  daysLeft: number
+  status: CampaignStatus
+  videosRequired: number
+  videosPosted: number
+  earnings: string
+  potential: string
+}
+
+interface ViewsDataPoint {
+  date: string
+  views: number
+}
+
+const VIEWS_DATA: ViewsDataPoint[] = []
+const CAMPAIGNS: CreatorCampaign[] = []
 
 type ActivityType = "payment" | "viral" | "campaign" | "payout_sent" | "milestone"
 
@@ -81,14 +50,7 @@ interface Activity {
   amount?: string
 }
 
-const ACTIVITY: Activity[] = [
-  { id: 1, type: "payment",     message: "AuraBrand approved your payout",          time: "2h ago",  amount: "$120" },
-  { id: 2, type: "viral",       message: "Your video hit 500K views! 🔥",            time: "5h ago"                  },
-  { id: 3, type: "campaign",    message: "New campaign brief from FitEdge",          time: "1d ago"                  },
-  { id: 4, type: "payout_sent", message: "Payment of $340 sent to PayPal",           time: "2d ago",  amount: "$340" },
-  { id: 5, type: "milestone",   message: "You crossed 1M total views lifetime! 🎉",  time: "3d ago"                  },
-  { id: 6, type: "payment",     message: "NexGear sent you a campaign invite",        time: "4d ago"                  },
-]
+const ACTIVITY: Activity[] = []
 
 const ACTIVITY_ICON: Record<ActivityType, { icon: typeof CheckCircle2; color: string; bg: string }> = {
   payment:     { icon: DollarSign,  color: "#34d399", bg: "rgba(16,185,129,0.1)"  },
@@ -117,7 +79,7 @@ function ChartTip({ active, payload, label }: TTProps) {
   )
 }
 
-interface BriefModalProps { campaign: typeof MOCK_CAMPAIGNS[0]; onClose: () => void }
+interface BriefModalProps { campaign: CreatorCampaign; onClose: () => void }
 function BriefModal({ campaign, onClose }: BriefModalProps) {
   const s = STATUS_CFG[campaign.status]
   return (
@@ -182,7 +144,7 @@ function BriefModal({ campaign, onClose }: BriefModalProps) {
 
 export default function CreatorHomePage() {
   const [creatorName, setCreatorName] = useState("there")
-  const [activeBrief, setActiveBrief] = useState<typeof MOCK_CAMPAIGNS[0] | null>(null)
+  const [activeBrief, setActiveBrief] = useState<CreatorCampaign | null>(null)
 
   useEffect(() => {
     const supabase = createBrowserClient(
@@ -197,8 +159,7 @@ export default function CreatorHomePage() {
   }, [])
 
   const totalViews = VIEWS_DATA.reduce((s, d) => s + d.views, 0)
-  const prevMonthViews = Math.round(totalViews * 0.82)
-  const viewsGrowth = (((totalViews - prevMonthViews) / prevMonthViews) * 100).toFixed(1)
+  const activeCampaignCount = CAMPAIGNS.filter(c => c.status === "active").length
 
   return (
     <div style={{ maxWidth: "960px", display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -220,10 +181,10 @@ export default function CreatorHomePage() {
       {/* Stat cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
         {[
-          { title: "Total Views",      value: `${(totalViews / 1000000).toFixed(1)}M`, change: `+${viewsGrowth}%`, up: true,  icon: Eye,       fgColor: "#60a5fa", bgColor: "rgba(59,130,246,0.1)"  },
-          { title: "Active Campaigns", value: "2",    change: "+1",   up: true,  icon: Megaphone,  fgColor: "#a78bfa", bgColor: "rgba(124,58,237,0.1)" },
-          { title: "Total Earnings",   value: "$1,840", change: "+$450", up: true,  icon: DollarSign, fgColor: "#34d399", bgColor: "rgba(16,185,129,0.1)" },
-          { title: "Pending Payout",   value: "$450", change: "Due Jul 1", up: true,  icon: Clock,     fgColor: "#fbbf24", bgColor: "rgba(245,158,11,0.1)" },
+          { title: "Total Views",      value: totalViews > 0 ? totalViews.toLocaleString() : "0", icon: Eye,       fgColor: "#60a5fa", bgColor: "rgba(59,130,246,0.1)"  },
+          { title: "Active Campaigns", value: String(activeCampaignCount),                         icon: Megaphone,  fgColor: "#a78bfa", bgColor: "rgba(124,58,237,0.1)" },
+          { title: "Total Earnings",   value: "$0",                                                  icon: DollarSign, fgColor: "#34d399", bgColor: "rgba(16,185,129,0.1)" },
+          { title: "Pending Payout",   value: "$0",                                                  icon: Clock,     fgColor: "#fbbf24", bgColor: "rgba(245,158,11,0.1)" },
         ].map(m => {
           const Icon = m.icon
           return (
@@ -234,14 +195,7 @@ export default function CreatorHomePage() {
                   <Icon style={{ width: "13px", height: "13px", color: m.fgColor }} />
                 </div>
               </div>
-              <p style={{ fontSize: "26px", fontWeight: 800, color: "#fafafa", marginBottom: "6px", lineHeight: 1 }}>{m.value}</p>
-              <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                {m.up
-                  ? <ArrowUpRight style={{ width: "12px", height: "12px", color: "#34d399" }} />
-                  : <ArrowDownRight style={{ width: "12px", height: "12px", color: "#f87171" }} />}
-                <span style={{ fontSize: "11px", color: m.up ? "#34d399" : "#f87171", fontWeight: 600 }}>{m.change}</span>
-                <span style={{ fontSize: "11px", color: "#52525b", marginLeft: "2px" }}>vs last month</span>
-              </div>
+              <p style={{ fontSize: "26px", fontWeight: 800, color: "#fafafa", lineHeight: 1 }}>{m.value}</p>
             </div>
           )
         })}
@@ -255,26 +209,34 @@ export default function CreatorHomePage() {
             <div>
               <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#fafafa" }}>Views — last 30 days</h2>
               <p style={{ fontSize: "12px", color: "#52525b", marginTop: "2px" }}>
-                {totalViews.toLocaleString()} total · <span style={{ color: "#34d399" }}>+{viewsGrowth}% vs prev period</span>
+                {totalViews > 0 ? `${totalViews.toLocaleString()} total` : "No view data yet"}
               </p>
             </div>
-            <TrendingUp style={{ width: "16px", height: "16px", color: "#34d399" }} />
+            {totalViews > 0 && <TrendingUp style={{ width: "16px", height: "16px", color: "#34d399" }} />}
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={VIEWS_DATA} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="creatorGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#7C3AED" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="#7C3AED" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 10 }} tickLine={false} axisLine={false} interval={4} />
-              <YAxis tick={{ fill: "#52525b", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${(v/1000).toFixed(0)}K`} />
-              <Tooltip content={<ChartTip />} />
-              <Area type="monotone" dataKey="views" stroke="#7C3AED" strokeWidth={2} fill="url(#creatorGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
+          {VIEWS_DATA.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "48px 24px" }}>
+              <Eye style={{ width: "28px", height: "28px", color: "#52525b", margin: "0 auto 12px" }} />
+              <p style={{ fontSize: "14px", fontWeight: 600, color: "#a1a1aa", marginBottom: "4px" }}>No views tracked yet</p>
+              <p style={{ fontSize: "12px", color: "#52525b" }}>Add videos to start seeing your performance chart.</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={VIEWS_DATA} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="creatorGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7C3AED" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#7C3AED" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 10 }} tickLine={false} axisLine={false} interval={4} />
+                <YAxis tick={{ fill: "#52525b", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${(v/1000).toFixed(0)}K`} />
+                <Tooltip content={<ChartTip />} />
+                <Area type="monotone" dataKey="views" stroke="#7C3AED" strokeWidth={2} fill="url(#creatorGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
@@ -288,7 +250,13 @@ export default function CreatorHomePage() {
             <Link href="/creator/campaigns" style={{ fontSize: "12px", color: "#a78bfa", textDecoration: "none" }}>View all →</Link>
           </div>
 
-          {MOCK_CAMPAIGNS.map(c => {
+          {CAMPAIGNS.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px 16px" }}>
+              <Megaphone style={{ width: "24px", height: "24px", color: "#52525b", margin: "0 auto 10px" }} />
+              <p style={{ fontSize: "13px", fontWeight: 600, color: "#a1a1aa", marginBottom: "4px" }}>No active campaigns</p>
+              <p style={{ fontSize: "12px", color: "#52525b" }}>Campaign invites from brands will appear here.</p>
+            </div>
+          ) : CAMPAIGNS.map(c => {
             const s = STATUS_CFG[c.status]
             const pct = c.videosRequired > 0 ? Math.round((c.videosPosted / c.videosRequired) * 100) : 0
             return (
@@ -343,9 +311,9 @@ export default function CreatorHomePage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
               {[
-                { label: "This month", value: "$450",   highlight: true  },
-                { label: "Last month", value: "$620",   highlight: false },
-                { label: "All time",   value: "$1,840", highlight: false },
+                { label: "This month", value: "$0", highlight: true  },
+                { label: "Last month", value: "$0", highlight: false },
+                { label: "All time",   value: "$0", highlight: false },
               ].map(e => (
                 <div key={e.label} style={{ padding: "12px 10px", borderRadius: "10px", border: `1px solid ${e.highlight ? "rgba(16,185,129,0.3)" : "rgba(255,255,255,0.06)"}`, backgroundColor: e.highlight ? "rgba(16,185,129,0.06)" : "rgba(255,255,255,0.02)", textAlign: "center" }}>
                   <p style={{ fontSize: "16px", fontWeight: 800, color: e.highlight ? "#34d399" : "#fafafa", lineHeight: 1 }}>{e.value}</p>
@@ -353,15 +321,8 @@ export default function CreatorHomePage() {
                 </div>
               ))}
             </div>
-            {/* Pending payout CTA */}
-            <div style={{ marginTop: "14px", padding: "12px 14px", borderRadius: "10px", border: "1px solid rgba(245,158,11,0.2)", backgroundColor: "rgba(245,158,11,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-              <div>
-                <p style={{ fontSize: "12px", fontWeight: 700, color: "#fbbf24" }}>$450 pending approval</p>
-                <p style={{ fontSize: "11px", color: "#71717a", marginTop: "1px" }}>Expected by Jul 1, 2025</p>
-              </div>
-              <Link href="/creator/earnings" style={{ fontSize: "11px", fontWeight: 600, color: "#fbbf24", textDecoration: "none", whiteSpace: "nowrap" }}>
-                View →
-              </Link>
+            <div style={{ marginTop: "14px", padding: "12px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.06)", backgroundColor: "rgba(255,255,255,0.02)", textAlign: "center" }}>
+              <p style={{ fontSize: "12px", color: "#52525b" }}>No pending payouts</p>
             </div>
           </div>
 
@@ -374,7 +335,13 @@ export default function CreatorHomePage() {
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              {ACTIVITY.map(a => {
+              {ACTIVITY.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "24px 12px" }}>
+                  <Bell style={{ width: "20px", height: "20px", color: "#52525b", margin: "0 auto 8px" }} />
+                  <p style={{ fontSize: "12px", fontWeight: 600, color: "#a1a1aa", marginBottom: "2px" }}>No recent activity</p>
+                  <p style={{ fontSize: "11px", color: "#52525b" }}>Payouts, milestones, and invites will show up here.</p>
+                </div>
+              ) : ACTIVITY.map(a => {
                 const cfg = ACTIVITY_ICON[a.type]
                 const Icon = cfg.icon
                 return (

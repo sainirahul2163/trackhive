@@ -69,7 +69,7 @@ export interface AccountWithTotals extends TrackedAccount {
 
 function workspaceFilter(userId?: string) {
   if (!userId) return null
-  return `workspace_id.eq.${userId},workspace_id.is.null`
+  return `workspace_id.eq.${userId}`
 }
 
 export function defaultDateRange(days = 30): { from: Date; to: Date } {

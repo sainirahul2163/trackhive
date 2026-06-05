@@ -12,54 +12,12 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/lib/platform"
+import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
 import { fetchCampaign, fetchCampaignCreators } from "@/lib/campaigns-data"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Campaign, CampaignCreator, CampaignStatus, CreatorStatus, PayoutStatus } from "@/types"
 
-// ── Mock data ─────────────────────────────────────────────────
-const MOCK_CAMPAIGN: Campaign = {
-  id: "1", workspace_id: null, name: "Summer Drop 2024", brand: "ProteinPro",
-  status: "active", start_date: "2024-06-01", end_date: "2024-07-31",
-  target_views: 5000000, target_videos: 20, total_views: 3240000, total_videos: 12,
-  total_payout: 14800, base_fee: 200, cpm_rate: 4.5, milestone_bonus: 500,
-  performance_cap: 2000, payout_window: 30,
-  brief: `This campaign promotes ProteinPro's new whey isolate line.\n\nContent requirements:\n• 60–90 second TikTok/Reel\n• Must include product unboxing or taste test\n• Use hashtags: #ProteinPro #GainSeason\n• CTA: Link in bio to 20% off code\n\nDos:\n✓ Show real workout footage\n✓ Authentic reactions only\n\nDon'ts:\n✗ No competitor mentions\n✗ No clickbait thumbnails`,
-  created_at: new Date().toISOString(),
-}
-
-const MOCK_CREATORS: CampaignCreator[] = [
-  { id: "cc1", campaign_id: "1", account_id: "1", status: "active", videos_posted: 4, views_delivered: 1400000, payout_earned: 7100, payout_status: "approved", last_posted_at: new Date(Date.now() - 86400000).toISOString(), joined_at: new Date().toISOString(), account: { id: "1", workspace_id: null, platform: "tiktok", username: "jake_fitness", display_name: "Jake Fitness", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=jake", profile_url: null, follower_count: 1240000, total_views: 48200000, avg_views: 820000, engagement_rate: 6.8, last_synced_at: null, created_at: "" } },
-  { id: "cc2", campaign_id: "1", account_id: "2", status: "active", videos_posted: 3, views_delivered: 920000, payout_earned: 4740, payout_status: "pending", last_posted_at: new Date(Date.now() - 172800000).toISOString(), joined_at: new Date().toISOString(), account: { id: "2", workspace_id: null, platform: "instagram", username: "glowup_daily", display_name: "Glow Up Daily", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=glow", profile_url: null, follower_count: 892000, total_views: 21500000, avg_views: 340000, engagement_rate: 4.2, last_synced_at: null, created_at: "" } },
-  { id: "cc3", campaign_id: "1", account_id: "3", status: "behind_schedule", videos_posted: 1, views_delivered: 520000, payout_earned: 2540, payout_status: "pending", last_posted_at: new Date(Date.now() - 604800000).toISOString(), joined_at: new Date().toISOString(), account: { id: "3", workspace_id: null, platform: "youtube", username: "techreviewer", display_name: "Tech Reviewer", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=tech", profile_url: null, follower_count: 560000, total_views: 92000000, avg_views: 1200000, engagement_rate: 3.5, last_synced_at: null, created_at: "" } },
-  { id: "cc4", campaign_id: "1", account_id: "4", status: "active", videos_posted: 4, views_delivered: 400000, payout_earned: 2420, payout_status: "on_hold", last_posted_at: new Date(Date.now() - 3600000).toISOString(), joined_at: new Date().toISOString(), account: { id: "4", workspace_id: null, platform: "tiktok", username: "freelife_nyc", display_name: "Free Life NYC", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=free", profile_url: null, follower_count: 330000, total_views: 9800000, avg_views: 290000, engagement_rate: 5.1, last_synced_at: null, created_at: "" } },
-]
-
-const MOCK_VIDEOS = [
-  { id: "v1", creator: "Jake Fitness", platform: "tiktok" as const, thumbnail: "https://picsum.photos/seed/c1/200/120", caption: "Tried every protein powder for 30 days 💪", views: 1200000, virality_score: 9.1, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jake" },
-  { id: "v2", creator: "Glow Up Daily", platform: "instagram" as const, thumbnail: "https://picsum.photos/seed/c2/200/120", caption: "Why ProteinPro changed my fitness journey", views: 580000, virality_score: 6.2, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=glow" },
-  { id: "v3", creator: "Jake Fitness", platform: "tiktok" as const, thumbnail: "https://picsum.photos/seed/c3/200/120", caption: "Honest ProteinPro review after 2 weeks", views: 840000, virality_score: 7.8, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jake" },
-  { id: "v4", creator: "Free Life NYC", platform: "tiktok" as const, thumbnail: "https://picsum.photos/seed/c4/200/120", caption: "Morning routine ft. ProteinPro", views: 310000, virality_score: 3.4, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=free" },
-  { id: "v5", creator: "Tech Reviewer", platform: "youtube" as const, thumbnail: "https://picsum.photos/seed/c5/200/120", caption: "Full ProteinPro supplement stack review", views: 520000, virality_score: 5.4, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=tech" },
-  { id: "v6", creator: "Glow Up Daily", platform: "instagram" as const, thumbnail: "https://picsum.photos/seed/c6/200/120", caption: "Post-gym protein shake recipe 🥤", views: 280000, virality_score: 4.1, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=glow" },
-]
-
-const ACTIVITY = [
-  { id: "a1", icon: "✅", text: "Jake Fitness posted a new video — 1.2M views", time: "2 hours ago" },
-  { id: "a2", icon: "💰", text: "Payout approved for Glow Up Daily ($4,740)", time: "5 hours ago" },
-  { id: "a3", icon: "⚠️", text: "Tech Reviewer is behind schedule (1/4 videos)", time: "Yesterday" },
-  { id: "a4", icon: "📹", text: "Free Life NYC posted video #4", time: "Yesterday" },
-  { id: "a5", icon: "🎯", text: "Campaign reached 3M views milestone", time: "2 days ago" },
-]
-
 // ── Helpers ───────────────────────────────────────────────────
-function generateChartData() {
-  return Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - 29 + i)
-    return { date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), views: Math.floor(Math.random() * 200000 + 50000) }
-  })
-}
-
 const STATUS_CONFIG: Record<CampaignStatus, { label: string; className: string }> = {
   active:    { label: "Active",    className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
   draft:     { label: "Draft",     className: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"         },
@@ -118,7 +76,7 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>("Overview")
-  const [chartData] = useState(generateChartData)
+  const chartData: { date: string; views: number }[] = []
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -131,9 +89,9 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
       setCampaign(camp)
       setCreators(crts)
     } catch {
-      // Fall back to mock data so UI is always visible
-      setCampaign(MOCK_CAMPAIGN)
-      setCreators(MOCK_CREATORS)
+      setError("Failed to load campaign")
+      setCampaign(null)
+      setCreators([])
     } finally {
       setLoading(false)
     }
@@ -284,17 +242,7 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
           {/* Activity feed */}
           <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
             <h2 className="text-[15px] font-semibold text-white mb-4">Recent Activity</h2>
-            <div className="space-y-3">
-              {ACTIVITY.map(a => (
-                <div key={a.id} className="flex items-start gap-2.5">
-                  <span className="text-base leading-none mt-0.5">{a.icon}</span>
-                  <div>
-                    <p className="text-xs text-zinc-300 leading-relaxed">{a.text}</p>
-                    <p className="text-[11px] text-zinc-600 mt-0.5">{a.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <p className="text-sm text-zinc-500 py-4 text-center">Activity will appear as creators post content</p>
           </div>
 
           {/* Creator leaderboard */}
@@ -398,7 +346,7 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
       {activeTab === "Content" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-500">{MOCK_VIDEOS.length} videos posted</p>
+            <p className="text-sm text-zinc-500">{campaign?.total_videos ?? 0} videos posted</p>
             <div className="relative">
               <select className="appearance-none pl-3 pr-8 py-2 rounded-lg bg-[#111111] border border-white/[0.06] text-sm text-zinc-300 outline-none cursor-pointer">
                 <option className="bg-[#1a1a1a]">All Creators</option>
@@ -407,36 +355,42 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" />
             </div>
           </div>
+          {(campaign?.total_videos ?? 0) === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] p-12 text-center">
+              <Video className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+              <p className="text-sm text-zinc-400">No campaign content yet</p>
+              <p className="text-xs text-zinc-600 mt-1">Videos will appear when creators post for this campaign</p>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {MOCK_VIDEOS.map(v => {
-              const vl = viralityLabel(v.virality_score)
-              const platCfg = PLATFORM_CONFIG[v.platform]
+            {/* Campaign videos load from tracked content when available */}
+            {creators.length > 0 && creators.map(c => {
+              const acc = c.account
+              if (!acc) return null
+              const platCfg = PLATFORM_CONFIG[acc.platform]
               return (
-                <div key={v.id} className="rounded-xl border border-white/[0.06] bg-[#111111] overflow-hidden hover:border-white/10 transition-all group">
-                  <div className="aspect-video bg-white/[0.03] relative overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={v.thumbnail} alt="" className="w-full h-full object-cover" />
-                    <div className="absolute top-2 right-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${vl.className}`}>{vl.label}</span>
-                    </div>
+                <div key={c.id} className="rounded-xl border border-white/[0.06] bg-[#111111] overflow-hidden hover:border-white/10 transition-all group">
+                  <div className="aspect-video bg-white/[0.03] relative overflow-hidden flex items-center justify-center">
+                    <Video className="w-8 h-8 text-zinc-600" />
                   </div>
                   <div className="p-3 space-y-2">
-                    <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition-colors line-clamp-2">{v.caption}</p>
+                    <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition-colors line-clamp-2">{c.videos_posted} video{c.videos_posted !== 1 ? "s" : ""} posted</p>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Avatar className="w-5 h-5"><AvatarImage src={v.avatar} /><AvatarFallback className="text-[8px]">C</AvatarFallback></Avatar>
-                        <span className="text-xs text-zinc-500">{v.creator}</span>
+                        <Avatar className="w-5 h-5"><AvatarImage src={acc.avatar_url ?? ""} /><AvatarFallback className="text-[8px]">C</AvatarFallback></Avatar>
+                        <span className="text-xs text-zinc-500">{acc.display_name}</span>
                         <span className={`flex items-center gap-0.5 text-[10px] ${platCfg.textColor}`}>
-                          <PlatformIcon platform={v.platform} className="w-2.5 h-2.5" />
+                          <PlatformIcon platform={acc.platform} className="w-2.5 h-2.5" />
                         </span>
                       </div>
-                      <span className="text-xs font-medium text-zinc-300">{formatNumber(v.views)}</span>
+                      <span className="text-xs font-medium text-zinc-300">{formatNumber(c.views_delivered)}</span>
                     </div>
                   </div>
                 </div>
               )
             })}
           </div>
+          )}
         </div>
       )}
 

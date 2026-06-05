@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import {
   Search, Bookmark, BookmarkCheck, Play, TrendingUp,
   Sparkles, Copy, Download, ArrowRight, Plus,
-  ChevronDown, Flame, BarChart2, Lightbulb, AlertTriangle,
+  ChevronDown, Flame, BarChart2,
   Send, Check,
 } from "lucide-react"
 import {
@@ -16,37 +16,6 @@ import { fetchTrendVideos, fetchBoards, createBoard } from "@/lib/trends-data"
 import { useUser } from "@/lib/use-user"
 import type { TrendVideo, InspirationBoard, Platform, TrendNiche, ContentFormat } from "@/types"
 import { cn } from "@/lib/utils"
-
-// ── Mock data ─────────────────────────────────────────────────
-const THUMBNAILS = [
-  "https://picsum.photos/seed/t1/400/225",
-  "https://picsum.photos/seed/t2/400/225",
-  "https://picsum.photos/seed/t3/400/225",
-  "https://picsum.photos/seed/t4/400/225",
-  "https://picsum.photos/seed/t5/400/225",
-  "https://picsum.photos/seed/t6/400/225",
-  "https://picsum.photos/seed/t7/400/225",
-  "https://picsum.photos/seed/t8/400/225",
-  "https://picsum.photos/seed/t9/400/225",
-  "https://picsum.photos/seed/t10/400/225",
-  "https://picsum.photos/seed/t11/400/225",
-  "https://picsum.photos/seed/t12/400/225",
-]
-
-const MOCK_VIDEOS: TrendVideo[] = [
-  { id: "tv1",  workspace_id: null, platform: "tiktok",    video_url: null, thumbnail_url: THUMBNAILS[0],  caption: "I tried every protein powder for 30 days 💪 results shocked me", creator_handle: "@jakefit",       views: 8400000, likes: 620000, engagement_rate: 7.4, virality_score: 9.6, niche: "fitness",   content_format: "before_after", posted_at: new Date(Date.now()-172800000).toISOString(),  created_at: "" },
-  { id: "tv2",  workspace_id: null, platform: "instagram", video_url: null, thumbnail_url: THUMBNAILS[1],  caption: "POV: You finally found a skincare routine that works ✨",          creator_handle: "@glowup",        views: 5200000, likes: 410000, engagement_rate: 7.9, virality_score: 9.1, niche: "beauty",    content_format: "testimonial",  posted_at: new Date(Date.now()-259200000).toISOString(),  created_at: "" },
-  { id: "tv3",  workspace_id: null, platform: "tiktok",    video_url: null, thumbnail_url: THUMBNAILS[2],  caption: "The $0 budget hack that made me $10K this month 💰",              creator_handle: "@moneymoves",    views: 9800000, likes: 780000, engagement_rate: 8.0, virality_score: 9.8, niche: "finance",   content_format: "hook_first",   posted_at: new Date(Date.now()-86400000).toISOString(),   created_at: "" },
-  { id: "tv4",  workspace_id: null, platform: "youtube",   video_url: null, thumbnail_url: THUMBNAILS[3],  caption: "Full MacBook Pro M4 review — 3 months later",                     creator_handle: "@techreviewer",  views: 3100000, likes: 210000, engagement_rate: 6.8, virality_score: 7.2, niche: "tech",      content_format: "product_demo", posted_at: new Date(Date.now()-432000000).toISOString(),   created_at: "" },
-  { id: "tv5",  workspace_id: null, platform: "tiktok",    video_url: null, thumbnail_url: THUMBNAILS[4],  caption: "What I eat in a day as a professional chef 🍳",                   creator_handle: "@chefsana",      views: 4700000, likes: 380000, engagement_rate: 8.1, virality_score: 8.4, niche: "food",      content_format: "lifestyle",    posted_at: new Date(Date.now()-345600000).toISOString(),   created_at: "" },
-  { id: "tv6",  workspace_id: null, platform: "instagram", video_url: null, thumbnail_url: THUMBNAILS[5],  caption: "My morning routine changed everything (storytime)",                creator_handle: "@lifewithalex",  views: 2800000, likes: 190000, engagement_rate: 6.8, virality_score: 6.9, niche: "lifestyle", content_format: "storytime",    posted_at: new Date(Date.now()-518400000).toISOString(),   created_at: "" },
-  { id: "tv7",  workspace_id: null, platform: "tiktok",    video_url: null, thumbnail_url: THUMBNAILS[6],  caption: "Testing viral gym hacks so you don't have to 😤",                 creator_handle: "@fitfails",      views: 6600000, likes: 520000, engagement_rate: 7.9, virality_score: 9.0, niche: "fitness",   content_format: "before_after", posted_at: new Date(Date.now()-172800000).toISOString(),   created_at: "" },
-  { id: "tv8",  workspace_id: null, platform: "youtube",   video_url: null, thumbnail_url: THUMBNAILS[7],  caption: "I built a $500K Shopify store in 60 days — full breakdown",       creator_handle: "@ecomking",      views: 2200000, likes: 160000, engagement_rate: 7.3, virality_score: 7.8, niche: "finance",   content_format: "storytime",    posted_at: new Date(Date.now()-604800000).toISOString(),   created_at: "" },
-  { id: "tv9",  workspace_id: null, platform: "instagram", video_url: null, thumbnail_url: THUMBNAILS[8],  caption: "Rating every foundation shade from lightest to darkest 💄",       creator_handle: "@beautytruth",   views: 3900000, likes: 310000, engagement_rate: 7.9, virality_score: 8.7, niche: "beauty",    content_format: "product_demo", posted_at: new Date(Date.now()-259200000).toISOString(),   created_at: "" },
-  { id: "tv10", workspace_id: null, platform: "tiktok",    video_url: null, thumbnail_url: THUMBNAILS[9],  caption: "Day in the life of a NYC software engineer 👩‍💻",                  creator_handle: "@techlife",      views: 5800000, likes: 450000, engagement_rate: 7.8, virality_score: 8.9, niche: "tech",      content_format: "lifestyle",    posted_at: new Date(Date.now()-86400000).toISOString(),    created_at: "" },
-  { id: "tv11", workspace_id: null, platform: "facebook",  video_url: null, thumbnail_url: THUMBNAILS[10], caption: "How I paid off $80K debt in 2 years (real numbers)",              creator_handle: "@debtfree",      views: 1800000, likes: 140000, engagement_rate: 7.8, virality_score: 7.1, niche: "finance",   content_format: "testimonial",  posted_at: new Date(Date.now()-691200000).toISOString(),   created_at: "" },
-  { id: "tv12", workspace_id: null, platform: "tiktok",    video_url: null, thumbnail_url: THUMBNAILS[11], caption: "Aesthetic meal prep for the whole week 🥑",                       creator_handle: "@mealqueen",     views: 7200000, likes: 580000, engagement_rate: 8.1, virality_score: 9.3, niche: "food",      content_format: "hook_first",   posted_at: new Date(Date.now()-172800000).toISOString(),   created_at: "" },
-]
 
 // ── Config ────────────────────────────────────────────────────
 const FORMAT_LABELS: Record<ContentFormat, string> = {
@@ -239,7 +208,8 @@ export default function TrendsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("Library")
 
   // Library state — videos are global discovery content; boards are user-scoped
-  const [videos, setVideos] = useState<TrendVideo[]>(MOCK_VIDEOS)
+  const [videos, setVideos] = useState<TrendVideo[]>([])
+  const [videosLoading, setVideosLoading] = useState(true)
   const [boards, setBoards] = useState<InspirationBoard[]>([])
   const [savedVideoIds, setSavedVideoIds] = useState<Set<string>>(new Set())
   const [savingVideo, setSavingVideo] = useState<TrendVideo | null>(null)
@@ -252,9 +222,12 @@ export default function TrendsPage() {
   const [showNewBoard, setShowNewBoard] = useState(false)
   const [creatingBoard, setCreatingBoard] = useState(false)
 
-  // Load real data — fall back to mock videos if DB is empty
   useEffect(() => {
-    fetchTrendVideos().then(data => { if (data.length > 0) setVideos(data) }).catch(() => {/* keep mock */})
+    setVideosLoading(true)
+    fetchTrendVideos()
+      .then(setVideos)
+      .catch(() => setVideos([]))
+      .finally(() => setVideosLoading(false))
   }, [])
 
   useEffect(() => {
@@ -298,13 +271,7 @@ export default function TrendsPage() {
     try {
       const board = await createBoard(newBoardName.trim())
       setBoards(prev => [...prev, board])
-    } catch {
-      setBoards(prev => [...prev, {
-        id: Math.random().toString(36).slice(2),
-        workspace_id: null, campaign_id: null,
-        name: newBoardName.trim(), created_at: new Date().toISOString(),
-      }])
-    }
+    } catch { /* show error via empty boards */ }
     setNewBoardName(""); setShowNewBoard(false); setCreatingBoard(false)
   }
 
@@ -321,13 +288,38 @@ export default function TrendsPage() {
     setTimeout(() => { setGenerating(false); setBriefGenerated(true) }, 2000)
   }
 
-  const nicheBarData = [
-    { niche: "Hook-First",  growth: 94 },
-    { niche: "Before/After",growth: 87 },
-    { niche: "Storytime",   growth: 79 },
-    { niche: "Testimonial", growth: 71 },
-    { niche: "Lifestyle",   growth: 65 },
-  ]
+  const nicheBarData = useMemo(() => {
+    const byFormat = new Map<string, number>()
+    for (const v of videos) {
+      const key = v.content_format ?? "other"
+      byFormat.set(key, (byFormat.get(key) ?? 0) + v.virality_score)
+    }
+    return Array.from(byFormat.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([niche, growth]) => ({ niche: niche.replace(/_/g, " "), growth: Math.round(growth * 10) }))
+  }, [videos])
+
+  const topFormats = useMemo(() => {
+    const byFormat = new Map<string, { count: number; avgVirality: number }>()
+    for (const v of videos) {
+      const key = v.content_format ?? "other"
+      const cur = byFormat.get(key) ?? { count: 0, avgVirality: 0 }
+      byFormat.set(key, { count: cur.count + 1, avgVirality: cur.avgVirality + v.virality_score })
+    }
+    return Array.from(byFormat.entries())
+      .map(([format, stats]) => ({
+        rank: 0,
+        format: format.replace(/_/g, " "),
+        desc: `${stats.count} trending video${stats.count !== 1 ? "s" : ""} in your library`,
+        avgVirality: stats.avgVirality / stats.count,
+        change: `avg ${(stats.avgVirality / stats.count).toFixed(1)}`,
+        thumbnail: null as string | null,
+      }))
+      .sort((a, b) => b.avgVirality - a.avgVirality)
+      .slice(0, 5)
+      .map((f, i) => ({ ...f, rank: i + 1, thumbnail: videos.find(v => (v.content_format ?? "other").replace(/_/g, " ") === f.format)?.thumbnail_url ?? null }))
+  }, [videos])
 
   interface ChartTTProps { active?: boolean; payload?: Array<{ value: number }>; label?: string }
   const ChartTT = ({ active, payload, label }: ChartTTProps) => {
@@ -401,11 +393,15 @@ export default function TrendsPage() {
             </div>
 
             {/* Video grid */}
-            {filtered.length === 0 ? (
+            {videosLoading ? (
+              <div className="flex items-center justify-center py-24 rounded-xl border border-white/[0.06] bg-[#111111]">
+                <p className="text-sm text-zinc-500">Loading trend videos…</p>
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 rounded-xl border border-white/[0.06] bg-[#111111]">
                 <TrendingUp className="w-8 h-8 text-zinc-600 mb-3" />
-                <p className="text-sm font-medium text-zinc-400">No videos match your filters</p>
-                <p className="text-xs text-zinc-600 mt-1">Try adjusting the platform, niche, or format filter.</p>
+                <p className="text-sm font-medium text-zinc-400">{videos.length === 0 ? "No trend videos yet" : "No videos match your filters"}</p>
+                <p className="text-xs text-zinc-600 mt-1">{videos.length === 0 ? "Trending content will appear here once synced." : "Try adjusting the platform, niche, or format filter."}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -460,10 +456,10 @@ export default function TrendsPage() {
             <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-4 space-y-3">
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">This Week</p>
               {[
-                { label: "Avg viral score", value: "8.6" },
-                { label: "Top platform",    value: "TikTok" },
-                { label: "Top format",      value: "Hook-First" },
-                { label: "Top niche",       value: "Finance" },
+                { label: "Videos tracked", value: String(videos.length) },
+                { label: "Avg viral score", value: videos.length ? (videos.reduce((s, v) => s + v.virality_score, 0) / videos.length).toFixed(1) : "—" },
+                { label: "Top platform", value: videos.length ? PLATFORM_CONFIG[[...videos].sort((a, b) => b.views - a.views)[0].platform].label : "—" },
+                { label: "Top format", value: topFormats[0]?.format ?? "—" },
               ].map(s => (
                 <div key={s.label} className="flex justify-between text-xs">
                   <span className="text-zinc-500">{s.label}</span>
@@ -478,7 +474,14 @@ export default function TrendsPage() {
       {/* ══ WEEKLY DIGEST TAB ════════════════════════════════════ */}
       {activeTab === "Weekly Digest" && (
         <div className="space-y-5 max-w-4xl">
-          {/* Header */}
+          {videos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 rounded-xl border border-white/[0.06] bg-[#111111]">
+              <Flame className="w-8 h-8 text-zinc-600 mb-3" />
+              <p className="text-sm font-medium text-zinc-400">No weekly digest yet</p>
+              <p className="text-xs text-zinc-600 mt-1">Trend videos will power your weekly insights once synced.</p>
+            </div>
+          ) : (
+          <>
           <div className="rounded-xl border border-white/[0.06] bg-gradient-to-br from-purple-600/10 to-blue-600/5 p-6">
             <div className="flex items-center gap-2 mb-1">
               <Flame className="w-5 h-5 text-orange-400" />
@@ -487,27 +490,24 @@ export default function TrendsPage() {
             <p className="text-sm text-zinc-400">
               Week of {new Date(Date.now() - 604800000).toLocaleDateString("en-US", { month: "long", day: "numeric" })} – {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
             </p>
-            <p className="text-xs text-zinc-500 mt-2">AI-curated from 12 tracked trend signals across 4 platforms.</p>
+            <p className="text-xs text-zinc-500 mt-2">Based on {videos.length} trend video{videos.length !== 1 ? "s" : ""} in your library.</p>
           </div>
 
-          {/* Top formats */}
           <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
             <div className="flex items-center gap-2 mb-4">
               <Flame className="w-4 h-4 text-orange-400" />
-              <h3 className="text-[15px] font-semibold text-white">Top 5 Formats Blowing Up</h3>
+              <h3 className="text-[15px] font-semibold text-white">Top Formats</h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {[
-                { rank: 1, format: "Hook-First",   desc: "Shocking stat or controversial opener drives 3× watch time",  change: "+41%", thumbnail: THUMBNAILS[2] },
-                { rank: 2, format: "Before/After", desc: "Transformation content crushes in fitness and beauty",         change: "+38%", thumbnail: THUMBNAILS[0] },
-                { rank: 3, format: "Storytime",    desc: "Relatable personal stories with 90s-ending open loops",        change: "+29%", thumbnail: THUMBNAILS[5] },
-                { rank: 4, format: "Meal Prep",    desc: "Aesthetic food prep with satisfying ASMR audio",               change: "+24%", thumbnail: THUMBNAILS[11] },
-                { rank: 5, format: "Day-in-Life",  desc: "Authentic behind-the-scenes converts best for SaaS products", change: "+19%", thumbnail: THUMBNAILS[9] },
-              ].map(f => (
+              {topFormats.map(f => (
                 <div key={f.rank} className="flex gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.08] transition-colors">
-                  <div className="w-16 h-10 rounded overflow-hidden flex-shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={f.thumbnail} alt="" className="w-full h-full object-cover" />
+                  <div className="w-16 h-10 rounded overflow-hidden flex-shrink-0 bg-white/[0.04] flex items-center justify-center">
+                    {f.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={f.thumbnail} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Play className="w-4 h-4 text-zinc-600" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -522,80 +522,23 @@ export default function TrendsPage() {
             </div>
           </div>
 
-          {/* Fastest growing niches chart */}
+          {nicheBarData.length > 0 && (
           <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
             <div className="flex items-center gap-2 mb-5">
               <BarChart2 className="w-4 h-4 text-blue-400" />
-              <h3 className="text-[15px] font-semibold text-white">Format Performance This Week</h3>
-              <span className="text-xs text-zinc-500 ml-1">vs. avg engagement baseline</span>
+              <h3 className="text-[15px] font-semibold text-white">Format Performance</h3>
             </div>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={nicheBarData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-                <XAxis type="number" domain={[0, 100]} tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
+                <XAxis type="number" tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false} />
                 <YAxis type="category" dataKey="niche" tick={{ fill: "#a1a1aa", fontSize: 12 }} tickLine={false} axisLine={false} width={90} />
                 <Tooltip content={<ChartTT />} />
                 <Bar dataKey="growth" fill="#7C3AED" radius={[0, 4, 4, 0]} maxBarSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-          {/* Hook styles */}
-          <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Lightbulb className="w-4 h-4 text-amber-400" />
-              <h3 className="text-[15px] font-semibold text-white">Hook Styles Working Right Now</h3>
-            </div>
-            <div className="space-y-3">
-              {[
-                { hook: "Shocking stat opener", example: '"99% of people don\'t know this about [product]…"',  platform: "tiktok" as Platform,    lift: "+87% watch time" },
-                { hook: "POV setup",             example: '"POV: you finally found a [product] that actually works"', platform: "instagram" as Platform, lift: "+64% saves" },
-                { hook: "Controversial take",    example: '"Hot take: [common advice] is destroying your [goal]"', platform: "tiktok" as Platform,    lift: "+51% shares" },
-                { hook: "Relatable frustration", example: '"I was so tired of [pain point] until I tried this"',  platform: "instagram" as Platform, lift: "+44% DMs" },
-              ].map(h => {
-                const pc = PLATFORM_CONFIG[h.platform]
-                return (
-                  <div key={h.hook} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                    <div className={`w-7 h-7 rounded-lg ${pc.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                      <PlatformIcon platform={h.platform} className={`w-3.5 h-3.5 ${pc.textColor}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-medium text-zinc-200">{h.hook}</span>
-                        <span className="text-[11px] text-emerald-400 font-medium">{h.lift}</span>
-                      </div>
-                      <p className="text-xs text-zinc-500 italic">{h.example}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Formats declining */}
-          <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              <h3 className="text-[15px] font-semibold text-white">Formats Declining This Week</h3>
-            </div>
-            <div className="space-y-2">
-              {[
-                { format: "Talking-head product reads",   reason: "Audiences skip past unedited talking-head ads",          drop: "-34%" },
-                { format: "Text-only overlay content",    reason: "Platforms deprioritizing static text overlays in feeds",  drop: "-28%" },
-                { format: "Unboxing without context",     reason: "Unboxing without a hook or narrative losing traction",    drop: "-21%" },
-              ].map(d => (
-                <div key={d.format} className="flex items-start gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-                  <span className="text-sm font-bold text-red-400 flex-shrink-0">{d.drop}</span>
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">{d.format}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{d.reason}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* CTA */}
+          )}
           <div className="flex justify-center pt-2">
             <button
               onClick={() => setActiveTab("Brief Generator")}
@@ -606,6 +549,8 @@ export default function TrendsPage() {
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
+          </>
+          )}
         </div>
       )}
 
@@ -642,7 +587,7 @@ export default function TrendsPage() {
                 <h2 className="text-base font-semibold text-white mb-1">Select Reference Videos</h2>
                 <p className="text-xs text-zinc-500 mb-4">Pick 3–5 videos to use as inspiration for your brief. Selected: <span className="text-purple-400 font-medium">{selectedForBrief.size}/5</span></p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {MOCK_VIDEOS.map(v => (
+                  {videos.map(v => (
                     <VideoCard
                       key={v.id} video={v}
                       selectable selected={selectedForBrief.has(v.id)}

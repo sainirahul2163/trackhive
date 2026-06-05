@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { createBrowserClient } from "@supabase/ssr"
 import {
   User, Mail, MapPin, Link as LinkIcon,
   Check, Edit3, Plus, Trash2, Bell, Shield, Eye, EyeOff, Save,
@@ -56,21 +57,14 @@ interface NotifPrefs {
   weeklyDigest: boolean
 }
 
-// ── Mock data ──────────────────────────────────────────────────
-const INITIAL_FORM: ProfileForm = {
-  displayName: "Alex Rivera",
-  email: "alex@creator.com",
-  bio: "Fitness & lifestyle creator. Sharing real routines, honest reviews, and everyday motivation 💪",
-  location: "Los Angeles, CA",
-  website: "alexrivera.co",
-  niche: "Fitness & Lifestyle",
+const EMPTY_FORM: ProfileForm = {
+  displayName: "",
+  email: "",
+  bio: "",
+  location: "",
+  website: "",
+  niche: "",
 }
-
-const SOCIAL_ACCOUNTS: SocialAccount[] = [
-  { id: "s1", platform: "tiktok",    handle: "@alexrivera",        followers: 1_240_000, verified: true  },
-  { id: "s2", platform: "instagram", handle: "@alexrivera.fit",    followers: 485_000,   verified: true  },
-  { id: "s3", platform: "youtube",   handle: "Alex Rivera",        followers: 312_000,   verified: false },
-]
 
 const INITIAL_NOTIF: NotifPrefs = {
   newCampaign:    true,
@@ -133,14 +127,32 @@ function Field({ label, value, onChange, placeholder, icon: Icon, type = "text",
 
 // ── Page ───────────────────────────────────────────────────────
 export default function CreatorProfilePage() {
-  const [form, setForm]         = useState<ProfileForm>(INITIAL_FORM)
+  const [form, setForm]         = useState<ProfileForm>(EMPTY_FORM)
   const [notif, setNotif]       = useState<NotifPrefs>(INITIAL_NOTIF)
   const [saved, setSaved]       = useState(false)
   const [showPass, setShowPass] = useState(false)
   const [activeTab, setActiveTab] = useState<"profile" | "socials" | "notifications" | "security">("profile")
-  const [socials]               = useState<SocialAccount[]>(SOCIAL_ACCOUNTS)
+  const [socials]               = useState<SocialAccount[]>([])
   const [currentPwd, setCurrentPwd] = useState("")
   const [newPwd, setNewPwd]         = useState("")
+
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    supabase.auth.getUser().then(({ data }) => {
+      const user = data?.user
+      if (!user) return
+      const meta = user.user_metadata
+      const name = (meta?.full_name ?? meta?.name ?? "") as string
+      setForm(f => ({
+        ...f,
+        displayName: name || f.displayName,
+        email: user.email ?? f.email,
+      }))
+    }).catch(() => {})
+  }, [])
 
   function set(key: keyof ProfileForm) {
     return (v: string) => setForm(f => ({ ...f, [key]: v }))
@@ -151,7 +163,9 @@ export default function CreatorProfilePage() {
     setTimeout(() => setSaved(false), 2500)
   }
 
-  const initials = form.displayName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+  const initials = form.displayName
+    ? form.displayName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+    : "?"
 
   const TABS: { id: typeof activeTab; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
     { id: "profile",       label: "Profile",       icon: User   },
@@ -188,9 +202,12 @@ export default function CreatorProfilePage() {
           </button>
         </div>
         <div>
-          <p style={{ fontSize: "16px", fontWeight: 800, color: "#fafafa" }}>{form.displayName}</p>
-          <p style={{ fontSize: "12px", color: "#71717a", marginTop: "2px" }}>{form.niche} · {form.location}</p>
+          <p style={{ fontSize: "16px", fontWeight: 800, color: "#fafafa" }}>{form.displayName || "Your name"}</p>
+          <p style={{ fontSize: "12px", color: "#71717a", marginTop: "2px" }}>
+            {[form.niche, form.location].filter(Boolean).join(" · ") || "Complete your profile"}
+          </p>
         </div>
+        {socials.length > 0 && (
         <div style={{ marginLeft: "auto", display: "flex", gap: "12px", flexWrap: "wrap" }}>
           {socials.map(s => {
             const cfg = PLAT_CFG[s.platform]
@@ -202,6 +219,7 @@ export default function CreatorProfilePage() {
             )
           })}
         </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -234,7 +252,8 @@ export default function CreatorProfilePage() {
               <label style={{ fontSize: "11px", fontWeight: 700, color: "#71717a", textTransform: "uppercase", letterSpacing: "0.07em" }}>Niche / Category</label>
               <div style={{ position: "relative" }}>
                 <select value={form.niche} onChange={e => set("niche")(e.target.value)}
-                  style={{ width: "100%", padding: "10px 32px 10px 12px", borderRadius: "9px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#0d0d0d", color: "#fafafa", fontSize: "13px", outline: "none", appearance: "none", cursor: "pointer", height: "40px", boxSizing: "border-box" }}>
+                  style={{ width: "100%", padding: "10px 32px 10px 12px", borderRadius: "9px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#0d0d0d", color: form.niche ? "#fafafa" : "#52525b", fontSize: "13px", outline: "none", appearance: "none", cursor: "pointer", height: "40px", boxSizing: "border-box" }}>
+                  <option value="">Select a niche</option>
                   {NICHES.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 <Edit3 style={{ position: "absolute", right: "11px", top: "50%", transform: "translateY(-50%)", width: "12px", height: "12px", color: "#52525b", pointerEvents: "none" }} />
@@ -247,7 +266,13 @@ export default function CreatorProfilePage() {
       {/* ── Tab: Social Accounts ─────────────────────────────── */}
       {activeTab === "socials" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {socials.map(s => {
+          {socials.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "72px 24px", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.06)", backgroundColor: "#111111" }}>
+              <LinkIcon style={{ width: "24px", height: "24px", color: "#52525b", margin: "0 auto 12px" }} />
+              <p style={{ fontSize: "15px", fontWeight: 700, color: "#fafafa", marginBottom: "6px" }}>No social accounts connected</p>
+              <p style={{ fontSize: "13px", color: "#71717a" }}>Connect your TikTok, Instagram, or YouTube to get started.</p>
+            </div>
+          ) : socials.map(s => {
             const cfg = PLAT_CFG[s.platform]
             const Icon = cfg.Icon
             return (

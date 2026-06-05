@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   Search, LayoutDashboard, BarChart3, Megaphone,
   CreditCard, TrendingUp, Swords, Settings, Bell,
-  Users, ArrowRight, Clock, Hash, X,
+  ArrowRight, Clock, Hash, X,
 } from "lucide-react"
 
 /* ─── Static navigation items ──────────────────────── */
@@ -20,20 +20,7 @@ const NAV_ITEMS = [
   { id: "nav-notifs",      label: "Notifications",  href: "/notifications",icon: Bell,            group: "Pages" },
 ]
 
-const MOCK_CREATORS = [
-  { id: "c1", label: "maya.creates",  sub: "TikTok · 1.2M followers", href: "/analytics/mock-maya",  icon: Users, group: "Creators" },
-  { id: "c2", label: "jake_creates",  sub: "Instagram · 840K followers", href: "/analytics/mock-jake", icon: Users, group: "Creators" },
-  { id: "c3", label: "techbyleo",     sub: "YouTube · 2.1M followers",  href: "/analytics/mock-leo",  icon: Users, group: "Creators" },
-  { id: "c4", label: "reels_anna",    sub: "Instagram · 520K followers", href: "/analytics/mock-anna", icon: Users, group: "Creators" },
-]
-
-const MOCK_CAMPAIGNS = [
-  { id: "camp1", label: "Summer Drop 2025",   sub: "Active · 3.2M views",  href: "/campaigns/1", icon: Megaphone, group: "Campaigns" },
-  { id: "camp2", label: "Back to School",     sub: "Active · 1.8M views",  href: "/campaigns/2", icon: Megaphone, group: "Campaigns" },
-  { id: "camp3", label: "Collab Series Q3",   sub: "Draft",                href: "/campaigns/3", icon: Megaphone, group: "Campaigns" },
-]
-
-const ALL_ITEMS = [...NAV_ITEMS, ...MOCK_CREATORS, ...MOCK_CAMPAIGNS]
+const ALL_ITEMS = [...NAV_ITEMS]
 
 type SearchItem = (typeof ALL_ITEMS)[number] & { sub?: string }
 

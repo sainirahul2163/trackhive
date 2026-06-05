@@ -29,15 +29,6 @@ const ROLE_COLORS: Record<Role, { bg: string; text: string }> = {
   Viewer: { bg: "rgba(113,113,122,0.15)", text: "#a1a1aa" },
 }
 
-const INIT_MEMBERS: TeamMember[] = [
-  { id: "1", name: "Rahul Saini",   email: "rahul@trackhive.io",  role: "Admin",  status: "Active",  avatarColor: "#7C3AED" },
-  { id: "2", name: "Sarah Chen",    email: "sarah@luminary.co",   role: "Member", status: "Active",  avatarColor: "#3b82f6" },
-  { id: "3", name: "Marcus Webb",   email: "marcus@fivex.io",     role: "Viewer", status: "Active",  avatarColor: "#10b981" },
-]
-
-const INIT_INVITES: PendingInvite[] = [
-  { id: "i1", email: "priya@novareach.com", role: "Member", sentAt: "2 hours ago" },
-]
 
 function RoleBadge({ role }: { role: Role }) {
   const c = ROLE_COLORS[role]
@@ -73,8 +64,8 @@ function RoleSelect({ value, onChange }: { value: Role; onChange: (r: Role) => v
 }
 
 export function TeamSettings() {
-  const [members, setMembers]   = useState<TeamMember[]>(INIT_MEMBERS)
-  const [invites, setInvites]   = useState<PendingInvite[]>(INIT_INVITES)
+  const [members, setMembers]   = useState<TeamMember[]>([])
+  const [invites, setInvites]   = useState<PendingInvite[]>([])
   const [showForm, setShowForm] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole]   = useState<Role>("Member")
