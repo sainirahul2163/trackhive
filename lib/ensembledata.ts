@@ -137,22 +137,6 @@ interface IGDetailedRaw {
   edge_owner_to_timeline_media: { count: number }
 }
 
-interface IGReelMediaRaw {
-  pk:              string
-  code:            string
-  taken_at:        number
-  like_count:      number
-  comment_count:   number
-  view_count:      number
-  play_count:      number
-  caption?:        { text: string }
-  image_versions2?: { candidates?: { url: string }[] }
-}
-
-interface IGReelsRaw {
-  reels: { media: IGReelMediaRaw }[]
-}
-
 // ─── In-process 1-hour cache ──────────────────────────────────────────────────
 
 const CACHE_TTL = 60 * 60 * 1000  // 1 hour in ms
@@ -259,48 +243,9 @@ export async function getTikTokUserVideos(username: string, depth = 1): Promise<
 
 // ─── Instagram helpers ────────────────────────────────────────────────────────
 
-/** Step 1: resolve username → numeric user_id (pk) via /instagram/user/info */
-async function resolveInstagramUserId(username: string): Promise<number> {
-  const cacheKey = `ig:pk:${username}`
-  const cached = fromCache<number>(cacheKey)
-  if (cached) return cached
-
-  const raw = await ed<IGUserInfoRaw>("/instagram/user/info", { username })
-  const userId = parseInt(raw.pk, 10)
-  if (!userId || Number.isNaN(userId)) {
-    throw new EnsembleDataError(422, `Could not resolve Instagram user_id for @${username}`)
-  }
-
-  toCache(cacheKey, userId)
-  return userId
-}
-
 function reelEngagementRate(views: number, likes: number, comments: number): number {
   if (views <= 0) return 0
   return Math.round(((likes + comments) / views) * 100 * 100) / 100
-}
-
-function mapInstagramReels(reels: IGReelsRaw["reels"]): InstagramPost[] {
-  return (reels ?? []).map(({ media: m }) => {
-    const likes    = m.like_count    ?? 0
-    const comments = m.comment_count ?? 0
-    const views    = m.view_count    ?? 0
-    const playCount = m.play_count   ?? 0
-
-    return {
-      id:              m.pk,
-      shortcode:       m.code,
-      caption:         m.caption?.text ?? "",
-      thumbnail:       m.image_versions2?.candidates?.[0]?.url ?? "",
-      views,
-      play_count:      playCount,
-      views_available: true as const,
-      likes,
-      comments,
-      engagement_rate: reelEngagementRate(views, likes, comments),
-      created_at:      new Date((m.taken_at ?? 0) * 1000).toISOString(),
-    }
-  })
 }
 
 export async function fetchInstagramReelsApify(username: string): Promise<InstagramPost[]> {
@@ -359,9 +304,7 @@ function accountEngagementFromReels(reels: InstagramPost[]): number {
 }
 
 // ─── 3. Instagram User Info ───────────────────────────────────────────────────
-// Step 1: /instagram/user/info → user_id (pk)
-// Step 2: /instagram/user/detailed-info → follower counts
-// Engagement rate calculated from /instagram/user/reels view_count data.
+// Profile: EnsembleData. Engagement rate: Apify reel scraper view counts.
 
 export async function getInstagramUserInfo(username: string): Promise<InstagramUserInfo> {
   const cacheKey = `ig:info:${username}`
@@ -404,8 +347,7 @@ export async function getInstagramUserInfo(username: string): Promise<InstagramU
 }
 
 // ─── 4. Instagram User Reels (posts with views) ───────────────────────────────
-// Step 1: /instagram/user/info → user_id (pk)
-// Step 2: /instagram/user/reels → view_count, play_count, like_count, comment_count
+// Apify instagram-reel-scraper → videoPlayCount, likesCount, commentsCount
 
 export async function getInstagramUserPosts(
   username: string,

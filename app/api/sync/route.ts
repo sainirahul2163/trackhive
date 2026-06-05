@@ -4,7 +4,7 @@ import {
   getTikTokUserInfo,
   getTikTokUserVideos,
   getInstagramUserInfo,
-  getInstagramUserPosts,
+  fetchInstagramReelsApify,
   EnsembleDataError,
   PLATFORM_LIMITATIONS,
 } from "@/lib/ensembledata"
@@ -160,8 +160,7 @@ async function syncTikTok(
 }
 
 // ─── Instagram sync ───────────────────────────────────────────────────────────
-// Step 1: /instagram/user/info → user_id (pk)
-// Step 2: /instagram/user/reels → view_count, play_count, like_count, comment_count
+// Profile info: EnsembleData. Reels + views: Apify instagram-reel-scraper.
 
 async function syncInstagram(
   supabase: ReturnType<typeof createServerSupabase>,
@@ -169,7 +168,7 @@ async function syncInstagram(
 ) {
   const [info, reels] = await Promise.all([
     getInstagramUserInfo(account.username),
-    getInstagramUserPosts(account.username, 2),
+    fetchInstagramReelsApify(account.username),
   ])
 
   const totalViews = reels.reduce((s, r) => s + r.views, 0)

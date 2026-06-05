@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { X, Link2, CheckCircle2, Loader2, AlertCircle, Users, Video } from "lucide-react"
+import { X, Link2, CheckCircle2, Loader2, AlertCircle, Users, Video, Eye } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -302,10 +302,22 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
                 </div>
                 <div className="flex flex-col gap-0.5 bg-white/[0.04] rounded-lg px-3 py-2.5">
                   <div className="flex items-center gap-1.5 text-zinc-500">
-                    <Video className="w-3 h-3" />
-                    <span className="text-[10px] font-medium uppercase tracking-wide">Videos</span>
+                    {preview.platform === "instagram" && preview.top_reel_views != null ? (
+                      <Eye className="w-3 h-3" />
+                    ) : (
+                      <Video className="w-3 h-3" />
+                    )}
+                    <span className="text-[10px] font-medium uppercase tracking-wide">
+                      {preview.platform === "instagram" && preview.top_reel_views != null
+                        ? "Top Reel Views"
+                        : "Videos"}
+                    </span>
                   </div>
-                  <span className="text-sm font-bold text-white">{fmt(preview.video_count)}</span>
+                  <span className="text-sm font-bold text-white">
+                    {preview.platform === "instagram" && preview.top_reel_views != null
+                      ? fmt(preview.top_reel_views)
+                      : fmt(preview.video_count)}
+                  </span>
                 </div>
               </div>
 

@@ -3,16 +3,19 @@ import {
   getTikTokUserInfo,
   getInstagramUserInfo,
   getYouTubeChannelInfo,
+  fetchInstagramReelsApify,
   EnsembleDataError,
 } from "@/lib/ensembledata"
 
 export interface AccountPreview {
-  platform:        "tiktok" | "instagram" | "youtube"
-  username:        string
-  display_name:    string
-  avatar_url:      string
-  follower_count:  number
-  video_count:     number
+  platform:         "tiktok" | "instagram" | "youtube"
+  username:         string
+  display_name:     string
+  avatar_url:       string
+  follower_count:   number
+  video_count:      number
+  /** Highest reel view count from Apify (Instagram only) */
+  top_reel_views?:  number
 }
 
 export async function GET(req: Request) {
@@ -38,14 +41,21 @@ export async function GET(req: Request) {
         video_count:    info.video_count,
       }
     } else if (platform === "instagram") {
-      const info = await getInstagramUserInfo(username)
+      const [info, reels] = await Promise.all([
+        getInstagramUserInfo(username),
+        fetchInstagramReelsApify(username),
+      ])
+      const topReelViews = reels.length
+        ? Math.max(...reels.map((r) => r.views))
+        : 0
       preview = {
         platform:       "instagram",
         username:       info.username,
         display_name:   info.full_name || info.username,
         avatar_url:     info.avatar_url,
         follower_count: info.follower_count,
-        video_count:    info.post_count,
+        video_count:    reels.length || info.post_count,
+        top_reel_views: topReelViews,
       }
     } else if (platform === "youtube") {
       const info = await getYouTubeChannelInfo(username)
