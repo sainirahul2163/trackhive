@@ -26,20 +26,22 @@ interface SyncResult {
 
 const ONE_HOUR_MS = 60 * 60 * 1000
 
-/** Columns that exist on tracked_videos (per migrations 001 + 008). */
+/** Exact tracked_videos insert columns (migrations 001 + 008). */
 interface TrackedVideoRow {
-  account_id:      string
-  platform:        TrackedAccountRow["platform"]
-  video_url:       string
-  thumbnail_url:   string | null
-  caption:         string | null
-  views:           number
-  likes:           number
-  comments:        number
-  shares:          number
-  engagement_rate: number
-  virality_score:  number
-  posted_at:       string | null
+  account_id:       string
+  platform:         TrackedAccountRow["platform"]
+  video_url:        string
+  thumbnail_url:    string | null
+  caption:          string | null
+  views:            number
+  likes:            number
+  comments:         number
+  shares:           number
+  engagement_rate:  number
+  virality_score:   number
+  posted_at:        string | null
+  duration_seconds?: number
+  audio_name?:      string | null
 }
 
 export async function POST(req: Request) {
@@ -139,26 +141,34 @@ async function syncTikTok(
     .eq("id", account.id)
 
   for (const video of videos) {
-    const videoUrl = `https://www.tiktok.com/@${account.username}/video/${video.id}`
-    const engagementRate = video.views
-      ? (((video.likes + video.comments + video.shares) / video.views) * 100)
-      : 0
-    const viralityScore = Math.min(10, Math.round((video.views / 100_000) * 10) / 10)
+    const videoId = String(video.id ?? "").trim()
+    if (!videoId) {
+      console.log("[sync] TikTok: skipping video with missing id")
+      continue
+    }
 
-    const payload: TrackedVideoRow = {
+    const views    = toNum(video.views)
+    const likes    = toNum(video.likes)
+    const comments = toNum(video.comments)
+    const shares   = toNum(video.shares)
+    const engagementRate = views
+      ? (((likes + comments + shares) / views) * 100)
+      : 0
+
+    const payload = buildTrackedVideoPayload({
       account_id:      account.id,
       platform:        "tiktok",
-      video_url:       videoUrl,
-      thumbnail_url:   video.thumbnail || null,
-      caption:         video.description || null,
-      views:           video.views,
-      likes:           video.likes,
-      comments:        video.comments,
-      shares:          video.shares,
-      engagement_rate: Math.round(engagementRate * 100) / 100,
-      virality_score:  viralityScore,
-      posted_at:       video.created_at || null,
-    }
+      video_url:       `https://www.tiktok.com/@${account.username}/video/${videoId}`,
+      thumbnail_url:   video.thumbnail,
+      caption:         video.description,
+      views,
+      likes,
+      comments,
+      shares,
+      engagement_rate: engagementRate,
+      virality_score:  Math.min(10, (views / 100_000) * 10),
+      posted_at:       video.created_at,
+    })
 
     const upserted = await upsertTrackedVideo(supabase, payload)
     if (upserted?.id) {
@@ -199,26 +209,33 @@ async function syncInstagram(
     .eq("id", account.id)
 
   for (const reel of reels) {
-    const videoUrl = `https://www.instagram.com/reel/${reel.shortcode}/`
-    const engagementRate = reel.views
-      ? (((reel.likes + reel.comments) / reel.views) * 100)
-      : 0
-    const viralityScore = Math.min(10, Math.round((reel.views / 50_000) * 10) / 10)
+    const shortcode = String(reel.shortcode ?? reel.id ?? "").trim()
+    if (!shortcode) {
+      console.log("[sync] Instagram: skipping reel with missing shortcode")
+      continue
+    }
 
-    const payload: TrackedVideoRow = {
+    const views    = toNum(reel.views)
+    const likes    = toNum(reel.likes)
+    const comments = toNum(reel.comments)
+    const engagementRate = views
+      ? (((likes + comments) / views) * 100)
+      : 0
+
+    const payload = buildTrackedVideoPayload({
       account_id:      account.id,
       platform:        "instagram",
-      video_url:       videoUrl,
-      thumbnail_url:   reel.thumbnail || null,
-      caption:         reel.caption || null,
-      views:           reel.views,
-      likes:           reel.likes,
-      comments:        reel.comments,
+      video_url:       `https://www.instagram.com/reel/${shortcode}/`,
+      thumbnail_url:   reel.thumbnail,
+      caption:         reel.caption,
+      views,
+      likes,
+      comments,
       shares:          0,
-      engagement_rate: Math.round(engagementRate * 100) / 100,
-      virality_score:  viralityScore,
-      posted_at:       reel.created_at || null,
-    }
+      engagement_rate: engagementRate,
+      virality_score:  Math.min(10, (views / 50_000) * 10),
+      posted_at:       reel.created_at,
+    })
 
     const upserted = await upsertTrackedVideo(supabase, payload)
     if (upserted?.id) {
@@ -234,51 +251,93 @@ async function syncInstagram(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Insert or update by account_id + video_url (no unique constraint on video_url for upsert). */
+function toNum(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(n) ? Math.trunc(n) : 0
+}
+
+/** Strip to exact tracked_videos schema; cast all numerics. */
+function buildTrackedVideoPayload(input: {
+  account_id:       string
+  platform:         TrackedAccountRow["platform"]
+  video_url:        string
+  thumbnail_url?:   string | null
+  caption?:         string | null
+  views?:           unknown
+  likes?:           unknown
+  comments?:        unknown
+  shares?:          unknown
+  engagement_rate?: unknown
+  virality_score?:  unknown
+  posted_at?:       string | null
+  duration_seconds?: unknown
+  audio_name?:      string | null
+}): TrackedVideoRow {
+  const row: TrackedVideoRow = {
+    account_id:      input.account_id,
+    platform:        input.platform,
+    video_url:       input.video_url.trim(),
+    thumbnail_url:   input.thumbnail_url?.trim() || null,
+    caption:         input.caption?.trim() || null,
+    views:           toNum(input.views),
+    likes:           toNum(input.likes),
+    comments:        toNum(input.comments),
+    shares:          toNum(input.shares),
+    engagement_rate: Math.round(toNum(input.engagement_rate) * 100) / 100,
+    virality_score:  Math.round(Math.min(10, toNum(input.virality_score)) * 10) / 10,
+    posted_at:       input.posted_at || null,
+  }
+
+  if (input.duration_seconds != null) {
+    row.duration_seconds = toNum(input.duration_seconds)
+  }
+  if (input.audio_name?.trim()) {
+    row.audio_name = input.audio_name.trim()
+  }
+
+  return row
+}
+
 async function upsertTrackedVideo(
   supabase: ReturnType<typeof createServerSupabase>,
-  payload: TrackedVideoRow,
+  videoPayload: TrackedVideoRow,
 ): Promise<{ id: string } | null> {
-  console.log("[sync] tracked_videos payload:", JSON.stringify(payload))
-
-  const { data: existing, error: findErr } = await supabase
-    .from("tracked_videos")
-    .select("id")
-    .eq("account_id", payload.account_id)
-    .eq("video_url", payload.video_url)
-    .maybeSingle()
-
-  if (findErr) {
-    console.error("[sync] tracked_videos lookup error:", findErr.message)
-    throw new Error(findErr.message)
+  if (!videoPayload.video_url) {
+    console.log("Inserting video: skipped — video_url is empty")
+    return null
   }
 
-  if (existing?.id) {
-    const { data, error } = await supabase
-      .from("tracked_videos")
-      .update(payload)
-      .eq("id", existing.id)
-      .select("id")
-      .single()
-
-    if (error) {
-      console.error("[sync] tracked_videos update error:", error.message, payload)
-      throw new Error(error.message)
-    }
-    return data
-  }
+  console.log("Inserting video:", JSON.stringify(videoPayload))
 
   const { data, error } = await supabase
     .from("tracked_videos")
-    .insert(payload)
+    .upsert(videoPayload, {
+      onConflict:       "video_url",
+      ignoreDuplicates: true,
+    })
     .select("id")
-    .single()
+    .maybeSingle()
 
   if (error) {
-    console.error("[sync] tracked_videos insert error:", error.message, payload)
+    console.log("Insert error:", JSON.stringify(error))
     throw new Error(error.message)
   }
-  return data
+
+  if (data?.id) return data
+
+  // Row already exists (ignoreDuplicates) — fetch id for daily snapshot
+  const { data: existing, error: findErr } = await supabase
+    .from("tracked_videos")
+    .select("id")
+    .eq("video_url", videoPayload.video_url)
+    .maybeSingle()
+
+  if (findErr) {
+    console.log("Insert error:", JSON.stringify(findErr))
+    throw new Error(findErr.message)
+  }
+
+  return existing
 }
 
 function computeEngagementRate(
