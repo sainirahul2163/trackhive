@@ -84,7 +84,8 @@ interface ApifyReelRaw {
   displayUrl?:    string
   previewUrl?:    string
   thumbnailUrl?:  string
-  images?:          string[]
+  imageUrl?:      string
+  images?:        string[]
   sharesCount?:     number
   videoShareCount?: number
 }
@@ -198,13 +199,16 @@ export function extractTikTokThumbnail(video?: TTPostRaw["video"]): string {
 }
 
 function extractInstagramThumbnail(reel: ApifyReelRaw): string {
-  return (
-    reel.displayUrl?.trim() ??
-    reel.previewUrl?.trim() ??
-    reel.thumbnailUrl?.trim() ??
-    reel.images?.[0]?.trim() ??
-    ""
-  )
+  const url =
+    reel.displayUrl?.trim() ||
+    reel.thumbnailUrl?.trim() ||
+    reel.previewUrl?.trim() ||
+    reel.images?.[0]?.trim() ||
+    reel.imageUrl?.trim() ||
+    null
+
+  console.log("[Instagram thumbnail]", url)
+  return url ?? ""
 }
 
 // ─── In-process 1-hour cache ──────────────────────────────────────────────────
@@ -391,6 +395,7 @@ export async function fetchInstagramReelsApify(username: string): Promise<Instag
   const posts: InstagramPost[] = raw
     .filter(r => r.videoPlayCount !== null && r.videoPlayCount > 0)
     .map(r => {
+      console.log("[Instagram reel raw]", JSON.stringify(r).substring(0, 800))
       const views    = r.videoPlayCount ?? 0
       const likes    = r.likesCount    ?? 0
       const comments = r.commentsCount ?? 0

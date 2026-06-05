@@ -233,9 +233,7 @@ async function syncInstagram(
     const likes    = toNum(reel.likes)
     const comments = toNum(reel.comments)
     const shares   = toNum(reel.shares)
-    console.log("[sync] Instagram reel fields:", JSON.stringify({
-      shortcode, views, likes, comments, shares, thumbnail: reel.thumbnail,
-    }))
+    console.log("[Instagram reel raw]", JSON.stringify(reel).substring(0, 800))
     const engagementRate = views
       ? (((likes + comments + shares) / views) * 100)
       : 0

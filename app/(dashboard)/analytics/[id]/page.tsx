@@ -34,25 +34,15 @@ import { fetchCampaigns } from "@/lib/campaigns-data"
 import { useUser } from "@/lib/use-user"
 import type { TrackedAccount, TrackedVideo, Campaign, Platform } from "@/types"
 
-function VideoThumbnail({
-  url,
+function VideoThumbnailPlaceholder({
   platform,
-  size = "table",
+  size,
 }: {
-  url:      string | null | undefined
   platform: Platform
-  size?:    "table" | "spotlight"
+  size:     "table" | "spotlight"
 }) {
   const cfg = PLATFORM_CONFIG[platform]
   const dim = size === "spotlight" ? "w-[100px] h-16" : "w-[72px] h-12"
-
-  if (url?.trim()) {
-    return (
-      <div className={`${dim} rounded-lg overflow-hidden flex-shrink-0 border border-white/[0.06]`}>
-        <img src={url.trim()} alt="" className="w-full h-full object-cover" />
-      </div>
-    )
-  }
 
   return (
     <div
@@ -66,6 +56,39 @@ function VideoThumbnail({
       ) : (
         <Video className={`${size === "spotlight" ? "w-6 h-6" : "w-5 h-5"} text-zinc-500`} />
       )}
+    </div>
+  )
+}
+
+function VideoThumbnail({
+  url,
+  platform,
+  size = "table",
+}: {
+  url:      string | null | undefined
+  platform: Platform
+  size?:    "table" | "spotlight"
+}) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const thumbnailUrl = url?.trim() ?? ""
+  const dim = size === "spotlight" ? "w-[100px] h-16" : "w-[72px] h-12"
+
+  useEffect(() => {
+    setImgFailed(false)
+  }, [thumbnailUrl])
+
+  if (!thumbnailUrl || imgFailed) {
+    return <VideoThumbnailPlaceholder platform={platform} size={size} />
+  }
+
+  return (
+    <div className={`${dim} rounded-lg overflow-hidden flex-shrink-0 border border-white/[0.06]`}>
+      <img
+        src={thumbnailUrl}
+        alt="video thumbnail"
+        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        onError={() => setImgFailed(true)}
+      />
     </div>
   )
 }
