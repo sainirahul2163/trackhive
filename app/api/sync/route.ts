@@ -231,6 +231,15 @@ async function syncInstagram(
     }
 
     console.log("[Instagram raw reel]", JSON.stringify(reel).substring(0, 800))
+    console.log("[Instagram reel ALL keys]", Object.keys(reel))
+    console.log("[Instagram reel shares fields]", {
+      sharesCount:     reel.sharesCount,
+      videoShareCount: reel.videoShareCount,
+      shareCount:      reel.shareCount,
+      shares:          reel.shares,
+      videoPlayCount:  reel.videoPlayCount,
+      likesCount:      reel.likesCount,
+    })
 
     const views    = toNum(reel.views)
     const likes    = toNum(reel.likes)
@@ -281,6 +290,8 @@ interface InstagramReelWithShares extends InstagramPost {
   sharesCount?:     number
   videoShareCount?: number
   shareCount?:      number
+  likesCount?:      number
+  videoPlayCount?:  number | null
 }
 
 function resolveTikTokShares(video: TikTokVideo): number {

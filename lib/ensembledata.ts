@@ -71,6 +71,12 @@ export interface InstagramPost {
   /** Per-reel engagement: (likes + comments) / views * 100 */
   engagement_rate: number
   created_at:      string
+  /** Apify raw fields preserved for sync debug */
+  sharesCount?:     number
+  videoShareCount?: number
+  shareCount?:      number
+  likesCount?:      number
+  videoPlayCount?:  number | null
 }
 
 interface ApifyReelRaw {
@@ -430,6 +436,11 @@ export async function fetchInstagramReelsApify(username: string): Promise<Instag
         shares,
         engagement_rate: reelEngagementRate(views, likes, comments),
         created_at:      r.timestamp ?? new Date().toISOString(),
+        sharesCount:     r.sharesCount,
+        videoShareCount: r.videoShareCount,
+        shareCount:      r.shareCount,
+        likesCount:      r.likesCount,
+        videoPlayCount:  r.videoPlayCount,
       }
     })
 

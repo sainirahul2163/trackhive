@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useParams } from "next/navigation"
 import {
   ArrowLeft, RefreshCw, ExternalLink,
@@ -78,6 +79,21 @@ function VideoThumbnail({
 
   if (!thumbnailUrl || imgFailed) {
     return <VideoThumbnailPlaceholder platform={platform} size={size} />
+  }
+
+  if (platform === "instagram") {
+    return (
+      <div className={`${dim} relative rounded-lg overflow-hidden flex-shrink-0 border border-white/[0.06]`}>
+        <Image
+          src={thumbnailUrl}
+          alt="video thumbnail"
+          fill
+          sizes={size === "spotlight" ? "100px" : "72px"}
+          className="object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      </div>
+    )
   }
 
   return (
