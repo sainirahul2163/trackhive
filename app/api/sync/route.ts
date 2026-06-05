@@ -140,6 +140,8 @@ async function syncTikTok(
     })
     .eq("id", account.id)
 
+  await insertFollowerSnapshot(supabase, account.id, info.follower_count)
+
   for (const video of videos) {
     const videoId = String(video.id ?? "").trim()
     if (!videoId) {
@@ -151,6 +153,9 @@ async function syncTikTok(
     const likes    = toNum(video.likes)
     const comments = toNum(video.comments)
     const shares   = toNum(video.shares)
+    console.log("[sync] TikTok video fields:", JSON.stringify({
+      id: video.id, views, likes, comments, shares, thumbnail: video.thumbnail,
+    }))
     const engagementRate = views
       ? (((likes + comments + shares) / views) * 100)
       : 0
@@ -159,7 +164,7 @@ async function syncTikTok(
       account_id:      account.id,
       platform:        "tiktok",
       video_url:       `https://www.tiktok.com/@${account.username}/video/${videoId}`,
-      thumbnail_url:   video.thumbnail,
+      thumbnail_url:   resolveThumbnailUrl(video.thumbnail),
       caption:         video.description,
       views,
       likes,
@@ -199,7 +204,7 @@ async function syncInstagram(
   const totalViews = reels.reduce((s, r) => s + r.views, 0)
   const avgViews   = reels.length ? Math.round(totalViews / reels.length) : 0
   const engRate    = computeEngagementRate(reels.map((r) => ({
-    views: r.views, likes: r.likes, comments: r.comments, shares: 0,
+    views: r.views, likes: r.likes, comments: r.comments, shares: r.shares,
   })))
 
   await supabase
@@ -215,6 +220,8 @@ async function syncInstagram(
     })
     .eq("id", account.id)
 
+  await insertFollowerSnapshot(supabase, account.id, profileResult.follower_count)
+
   for (const reel of reels) {
     const shortcode = String(reel.shortcode ?? reel.id ?? "").trim()
     if (!shortcode) {
@@ -225,20 +232,24 @@ async function syncInstagram(
     const views    = toNum(reel.views)
     const likes    = toNum(reel.likes)
     const comments = toNum(reel.comments)
+    const shares   = toNum(reel.shares)
+    console.log("[sync] Instagram reel fields:", JSON.stringify({
+      shortcode, views, likes, comments, shares, thumbnail: reel.thumbnail,
+    }))
     const engagementRate = views
-      ? (((likes + comments) / views) * 100)
+      ? (((likes + comments + shares) / views) * 100)
       : 0
 
     const payload = buildTrackedVideoPayload({
       account_id:      account.id,
       platform:        "instagram",
       video_url:       `https://www.instagram.com/reel/${shortcode}/`,
-      thumbnail_url:   reel.thumbnail,
+      thumbnail_url:   resolveThumbnailUrl(reel.thumbnail),
       caption:         reel.caption,
       views,
       likes,
       comments,
-      shares:          0,
+      shares,
       engagement_rate: engagementRate,
       virality_score:  Math.min(10, (views / 50_000) * 10),
       posted_at:       reel.created_at,
@@ -250,13 +261,18 @@ async function syncInstagram(
         views:    reel.views,
         likes:    reel.likes,
         comments: reel.comments,
-        shares:   0,
+        shares:   reel.shares,
       })
     }
   }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function resolveThumbnailUrl(url: string | null | undefined): string | null {
+  const trimmed = url?.trim()
+  return trimmed ? trimmed : null
+}
 
 function toNum(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value)
@@ -319,8 +335,7 @@ async function upsertTrackedVideo(
   const { data, error } = await supabase
     .from("tracked_videos")
     .upsert(videoPayload, {
-      onConflict:       "video_url",
-      ignoreDuplicates: true,
+      onConflict: "video_url",
     })
     .select("id")
     .maybeSingle()
@@ -363,17 +378,43 @@ async function insertDailySnapshot(
   stats:     { views: number; likes: number; comments: number; shares: number },
 ) {
   const today = new Date().toISOString().slice(0, 10)
-  await supabase
+  const { error } = await supabase
     .from("video_daily_stats")
     .upsert(
       {
         video_id: videoId,
         date:     today,
-        views:    stats.views,
-        likes:    stats.likes,
-        comments: stats.comments,
-        shares:   stats.shares,
+        views:    toNum(stats.views),
+        likes:    toNum(stats.likes),
+        comments: toNum(stats.comments),
+        shares:   toNum(stats.shares),
       },
       { onConflict: "video_id,date" },
     )
+
+  if (error) {
+    console.log("[sync] video_daily_stats upsert error:", JSON.stringify(error))
+  }
+}
+
+async function insertFollowerSnapshot(
+  supabase:       ReturnType<typeof createServerSupabase>,
+  accountId:      string,
+  followerCount:  number,
+) {
+  const today = new Date().toISOString().slice(0, 10)
+  const { error } = await supabase
+    .from("follower_snapshots")
+    .upsert(
+      {
+        account_id:     accountId,
+        follower_count: toNum(followerCount),
+        date:           today,
+      },
+      { onConflict: "account_id,date" },
+    )
+
+  if (error) {
+    console.log("[sync] follower_snapshots upsert error:", JSON.stringify(error))
+  }
 }

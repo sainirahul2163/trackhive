@@ -67,6 +67,7 @@ export interface InstagramPost {
   views_available: true
   likes:           number
   comments:        number
+  shares:          number
   /** Per-reel engagement: (likes + comments) / views * 100 */
   engagement_rate: number
   created_at:      string
@@ -80,6 +81,12 @@ interface ApifyReelRaw {
   videoPlayCount: number | null
   timestamp:      string
   url:            string
+  displayUrl?:    string
+  previewUrl?:    string
+  thumbnailUrl?:  string
+  images?:          string[]
+  sharesCount?:     number
+  videoShareCount?: number
 }
 
 interface ApifyProfileRaw {
@@ -126,19 +133,78 @@ interface TTUserRaw {
   }
 }
 
+interface TTCoverField {
+  url_list?: string[]
+}
+
 interface TTPostRaw {
-  aweme_id:   string
-  desc:       string
+  aweme_id:    string
+  desc:        string
   create_time: number
   video?: {
-    cover?: { url_list: string[] }
+    cover?:         TTCoverField
+    origin_cover?:  TTCoverField
+    originCover?:   TTCoverField
+    dynamic_cover?: TTCoverField
+    dynamicCover?:  TTCoverField
   }
-  statistics: {
-    play_count:    number
-    digg_count:    number
-    comment_count: number
-    share_count:   number
+  statistics?: {
+    play_count?:    number
+    digg_count?:    number
+    comment_count?: number
+    share_count?:   number
+    shareCount?:    number
   }
+  stats?: {
+    play_count?:    number
+    digg_count?:    number
+    comment_count?: number
+    share_count?:   number
+    shareCount?:    number
+  }
+}
+
+/** TikTok shares: share_count / shareCount on statistics or stats. */
+export function extractTikTokShares(post: TTPostRaw): number {
+  const stats = post.statistics ?? post.stats
+  if (!stats) return 0
+  const n = stats.share_count ?? stats.shareCount ?? 0
+  return Number.isFinite(Number(n)) ? Number(n) : 0
+}
+
+function extractInstagramShares(reel: ApifyReelRaw): number {
+  const n = reel.sharesCount ?? reel.videoShareCount ?? 0
+  return Number.isFinite(Number(n)) ? Number(n) : 0
+}
+
+function firstUrl(...lists: (string[] | undefined)[]): string {
+  for (const list of lists) {
+    const url = list?.[0]?.trim()
+    if (url) return url
+  }
+  return ""
+}
+
+/** TikTok cover: cover → originCover → dynamicCover (snake + camelCase). */
+export function extractTikTokThumbnail(video?: TTPostRaw["video"]): string {
+  if (!video) return ""
+  return firstUrl(
+    video.cover?.url_list,
+    video.origin_cover?.url_list,
+    video.originCover?.url_list,
+    video.dynamic_cover?.url_list,
+    video.dynamicCover?.url_list,
+  )
+}
+
+function extractInstagramThumbnail(reel: ApifyReelRaw): string {
+  return (
+    reel.displayUrl?.trim() ??
+    reel.previewUrl?.trim() ??
+    reel.thumbnailUrl?.trim() ??
+    reel.images?.[0]?.trim() ??
+    ""
+  )
 }
 
 // ─── In-process 1-hour cache ──────────────────────────────────────────────────
@@ -230,16 +296,19 @@ export async function getTikTokUserVideos(username: string, depth = 1): Promise<
 
   const raw = await ed<TTPostRaw[]>("/tt/user/posts", { username, depth })
 
-  const posts: TikTokVideo[] = (raw ?? []).map((p) => ({
-    id:          p.aweme_id,
-    description: p.desc ?? "",
-    thumbnail:   p.video?.cover?.url_list?.[0] ?? "",
-    views:       p.statistics?.play_count    ?? 0,
-    likes:       p.statistics?.digg_count    ?? 0,
-    comments:    p.statistics?.comment_count ?? 0,
-    shares:      p.statistics?.share_count   ?? 0,
-    created_at:  new Date((p.create_time ?? 0) * 1000).toISOString(),
-  }))
+  const posts: TikTokVideo[] = (raw ?? []).map((p) => {
+    const stats = p.statistics ?? p.stats
+    return {
+      id:          p.aweme_id,
+      description: p.desc ?? "",
+      thumbnail:   extractTikTokThumbnail(p.video),
+      views:       stats?.play_count    ?? 0,
+      likes:       stats?.digg_count    ?? 0,
+      comments:    stats?.comment_count ?? 0,
+      shares:      extractTikTokShares(p),
+      created_at:  new Date((p.create_time ?? 0) * 1000).toISOString(),
+    }
+  })
 
   toCache(cacheKey, posts)
   return posts
@@ -325,16 +394,18 @@ export async function fetchInstagramReelsApify(username: string): Promise<Instag
       const views    = r.videoPlayCount ?? 0
       const likes    = r.likesCount    ?? 0
       const comments = r.commentsCount ?? 0
+      const shares   = extractInstagramShares(r)
       return {
         id:              r.shortCode,
         shortcode:       r.shortCode,
         caption:         r.caption ?? '',
-        thumbnail:       '',
+        thumbnail:       extractInstagramThumbnail(r),
         views,
         play_count:      views,
         views_available: true as const,
         likes,
         comments,
+        shares,
         engagement_rate: reelEngagementRate(views, likes, comments),
         created_at:      r.timestamp ?? new Date().toISOString(),
       }

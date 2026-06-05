@@ -78,30 +78,105 @@ export interface DailyViewsPoint {
 export async function fetchDailyStats(accountId: string, days = 30): Promise<DailyViewsPoint[]> {
   const since = new Date()
   since.setDate(since.getDate() - days)
+  const sinceStr = since.toISOString().slice(0, 10)
 
   const { data, error } = await supabase
     .from("video_daily_stats")
     .select("date, views, likes, comments, shares, tracked_videos!inner(account_id)")
     .eq("tracked_videos.account_id", accountId)
-    .gte("date", since.toISOString().slice(0, 10))
+    .gte("date", sinceStr)
     .order("date", { ascending: true })
 
   if (error) throw new Error(error.message)
 
-  // Group by date and sum all videos
   const byDate = new Map<string, DailyViewsPoint>()
   for (const row of (data ?? []) as (DailyViewsPoint & { tracked_videos: unknown })[]) {
     const existing = byDate.get(row.date)
     if (existing) {
-      existing.views    += row.views
-      existing.likes    += row.likes
-      existing.comments += row.comments
-      existing.shares   += row.shares
+      existing.views    += Number(row.views    ?? 0)
+      existing.likes    += Number(row.likes    ?? 0)
+      existing.comments += Number(row.comments ?? 0)
+      existing.shares   += Number(row.shares   ?? 0)
     } else {
-      byDate.set(row.date, { date: row.date, views: row.views, likes: row.likes, comments: row.comments, shares: row.shares })
+      byDate.set(row.date, {
+        date:     row.date,
+        views:    Number(row.views    ?? 0),
+        likes:    Number(row.likes    ?? 0),
+        comments: Number(row.comments ?? 0),
+        shares:   Number(row.shares   ?? 0),
+      })
     }
   }
-  return Array.from(byDate.values())
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/** Synthetic daily views from posted_at + real video_daily_stats merged. */
+export function buildDailyViewsChart(
+  videos:     TrackedVideo[],
+  dailyStats: DailyViewsPoint[],
+): DailyViewsPoint[] {
+  const byDate = new Map<string, DailyViewsPoint>()
+
+  for (const v of videos) {
+    if (!v.posted_at) continue
+    const date = v.posted_at.slice(0, 10)
+    const views = Number(v.views ?? 0)
+    const existing = byDate.get(date)
+    if (existing) {
+      existing.views += views
+    } else {
+      byDate.set(date, { date, views, likes: 0, comments: 0, shares: 0 })
+    }
+  }
+
+  for (const row of dailyStats) {
+    const existing = byDate.get(row.date)
+    if (existing) {
+      existing.views    = Math.max(existing.views, row.views)
+      existing.likes    = row.likes
+      existing.comments = row.comments
+      existing.shares   = row.shares
+    } else {
+      byDate.set(row.date, { ...row })
+    }
+  }
+
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export function filterStatsByDays<T extends { date: string }>(points: T[], days: number): T[] {
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+  const sinceStr = since.toISOString().slice(0, 10)
+  return points.filter((p) => p.date >= sinceStr)
+}
+
+export interface FollowerSnapshotPoint {
+  date:            string
+  follower_count:  number
+}
+
+export async function fetchFollowerSnapshots(
+  accountId: string,
+  days = 90,
+): Promise<FollowerSnapshotPoint[]> {
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+  const sinceStr = since.toISOString().slice(0, 10)
+
+  const { data, error } = await supabase
+    .from("follower_snapshots")
+    .select("date, follower_count")
+    .eq("account_id", accountId)
+    .gte("date", sinceStr)
+    .order("date", { ascending: true })
+
+  if (error) throw new Error(error.message)
+
+  return (data ?? []).map((row) => ({
+    date:           String(row.date),
+    follower_count: Number(row.follower_count ?? 0),
+  }))
 }
 
 export async function insertTrackedAccount(

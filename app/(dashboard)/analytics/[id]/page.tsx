@@ -7,7 +7,7 @@ import {
   ArrowLeft, RefreshCw, ExternalLink,
   Eye, BarChart3, Video, ArrowUpRight,
   AlertCircle, DollarSign, Heart, MessageCircle, Share2,
-  Bookmark, Plus, Users, Zap, ChevronDown,
+  Plus, Users, Zap, ChevronDown,
   PlayCircle, BarChart2, Activity, Info,
 } from "lucide-react"
 import {
@@ -23,12 +23,52 @@ import {
   fetchTrackedVideos,
   fetchDailyStats,
   fetchAccountVideoAggregates,
+  fetchFollowerSnapshots,
+  buildDailyViewsChart,
+  filterStatsByDays,
   type DailyViewsPoint,
   type AccountVideoAggregates,
+  type FollowerSnapshotPoint,
 } from "@/lib/analytics-data"
 import { fetchCampaigns } from "@/lib/campaigns-data"
 import { useUser } from "@/lib/use-user"
 import type { TrackedAccount, TrackedVideo, Campaign, Platform } from "@/types"
+
+function VideoThumbnail({
+  url,
+  platform,
+  size = "table",
+}: {
+  url:      string | null | undefined
+  platform: Platform
+  size?:    "table" | "spotlight"
+}) {
+  const cfg = PLATFORM_CONFIG[platform]
+  const dim = size === "spotlight" ? "w-[100px] h-16" : "w-[72px] h-12"
+
+  if (url?.trim()) {
+    return (
+      <div className={`${dim} rounded-lg overflow-hidden flex-shrink-0 border border-white/[0.06]`}>
+        <img src={url.trim()} alt="" className="w-full h-full object-cover" />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`${dim} rounded-lg flex-shrink-0 border border-white/[0.06] flex items-center justify-center`}
+      style={{ backgroundColor: "#1a1a1a" }}
+    >
+      {platform in PLATFORM_CONFIG ? (
+        <span style={{ color: cfg.fgColor }}>
+          <PlatformIcon platform={platform} className={size === "spotlight" ? "w-6 h-6" : "w-5 h-5"} />
+        </span>
+      ) : (
+        <Video className={`${size === "spotlight" ? "w-6 h-6" : "w-5 h-5"} text-zinc-500`} />
+      )}
+    </div>
+  )
+}
 
 const PLATFORM_CPM_RATES: Record<Platform, number> = {
   tiktok: 0.03,
@@ -50,19 +90,26 @@ function calcEstCpmValue(platform: Platform, totalViews: number): string {
 }
 
 function buildEngagementData(videos: TrackedVideo[]) {
-  const totals = videos.reduce((acc, v) => ({
-    likes: acc.likes + v.likes,
-    comments: acc.comments + v.comments,
-    shares: acc.shares + v.shares,
-    saves: acc.saves + (v.saves ?? 0),
-  }), { likes: 0, comments: 0, shares: 0, saves: 0 })
+  const totals = videos.reduce(
+    (acc, v) => ({
+      likes:    acc.likes    + Number(v.likes    ?? 0),
+      comments: acc.comments + Number(v.comments ?? 0),
+      shares:   acc.shares   + Number(v.shares   ?? 0),
+    }),
+    { likes: 0, comments: 0, shares: 0 },
+  )
 
   return [
     { name: "Likes",    value: totals.likes,    color: "#a855f7" },
     { name: "Comments", value: totals.comments, color: "#3b82f6" },
     { name: "Shares",   value: totals.shares,   color: "#10b981" },
-    { name: "Saves",    value: totals.saves,    color: "#f59e0b" },
   ]
+}
+
+function formatChartViews(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`
+  return String(v)
 }
 
 function buildWeeklyData(videos: TrackedVideo[]) {
@@ -80,6 +127,12 @@ function buildWeeklyData(videos: TrackedVideo[]) {
 
 /* ─── Shared types ───────────────────────────────────── */
 type ChartTab = "views" | "followers"
+
+interface PerformanceChartPoint {
+  date:      string
+  views:     number
+  followers: number
+}
 
 /* ─── Tooltip ────────────────────────────────────────── */
 interface TooltipProps { active?: boolean; payload?: Array<{ value: number; name?: string }>; label?: string }
@@ -251,7 +304,8 @@ export default function AccountDetailPage() {
 
   const [account,       setAccount]       = useState<TrackedAccount | null>(null)
   const [videos,        setVideos]        = useState<TrackedVideo[]>([])
-  const [dailyStats,    setDailyStats]    = useState<DailyViewsPoint[]>([])
+  const [dailyStats,       setDailyStats]       = useState<DailyViewsPoint[]>([])
+  const [followerSnapshots, setFollowerSnapshots] = useState<FollowerSnapshotPoint[]>([])
   const [videoAggregates, setVideoAggregates] = useState<AccountVideoAggregates>({
     total_views: 0, total_likes: 0, total_comments: 0,
   })
@@ -269,11 +323,12 @@ export default function AccountDetailPage() {
     setLoading(true)
     setError(null)
     try {
-      const [acct, vids, daily, aggregates] = await Promise.all([
+      const [acct, vids, daily, aggregates, followers] = await Promise.all([
         fetchTrackedAccount(id),
         fetchTrackedVideos(id),
         fetchDailyStats(id, 90),
         fetchAccountVideoAggregates(id),
+        fetchFollowerSnapshots(id, 90).catch(() => [] as FollowerSnapshotPoint[]),
       ])
 
       console.log("[account detail] accountId:", id)
@@ -302,12 +357,14 @@ export default function AccountDetailPage() {
       setAccount(acct)
       setVideos(vids)
       setDailyStats(daily)
+      setFollowerSnapshots(followers)
       setVideoAggregates(resolvedAggregates)
     } catch {
       setError("Failed to load account")
       setAccount(null)
       setVideos([])
       setDailyStats([])
+      setFollowerSnapshots([])
       setVideoAggregates({ total_views: 0, total_likes: 0, total_comments: 0 })
     } finally {
       setLoading(false)
@@ -330,15 +387,33 @@ export default function AccountDetailPage() {
     }
   }
 
-  const chartData = useMemo(() =>
-    dailyStats.map((d) => ({
-      date: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      views: d.views,
-      followers: 0,
-    })),
-  [dailyStats])
+  const mergedDailyViews = useMemo(
+    () => buildDailyViewsChart(videos, dailyStats),
+    [videos, dailyStats],
+  )
 
-  const displayData = chartData.slice(-activeDays)
+  const viewsChartData = useMemo(
+    (): PerformanceChartPoint[] =>
+      filterStatsByDays(mergedDailyViews, activeDays).map((d) => ({
+        date:      new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        views:     d.views,
+        followers: 0,
+      })),
+    [mergedDailyViews, activeDays],
+  )
+
+  const followerChartData = useMemo(
+    (): PerformanceChartPoint[] =>
+      filterStatsByDays(followerSnapshots, activeDays).map((d) => ({
+        date:      new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        views:     0,
+        followers: d.follower_count,
+      })),
+    [followerSnapshots, activeDays],
+  )
+
+  const displayData: PerformanceChartPoint[] =
+    chartTab === "views" ? viewsChartData : followerChartData
   const engagementData = useMemo(() => buildEngagementData(videos), [videos])
   const weeklyData = useMemo(() => buildWeeklyData(videos), [videos])
 
@@ -393,7 +468,7 @@ export default function AccountDetailPage() {
     },
   ]
 
-  const PIE_COLORS = ["#a855f7", "#3b82f6", "#10b981", "#f59e0b"]
+  const PIE_COLORS = ["#a855f7", "#3b82f6", "#10b981"]
 
   return (
     <div className="space-y-5 max-w-7xl">
@@ -489,8 +564,14 @@ export default function AccountDetailPage() {
           {displayData.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-[220px] text-center">
               <BarChart3 className="w-8 h-8 text-zinc-700 mb-2" />
-              <p className="text-sm text-zinc-500">No view history yet</p>
-              <p className="text-xs text-zinc-600 mt-1">Sync this account to start collecting daily stats</p>
+              <p className="text-sm text-zinc-500">
+                {chartTab === "views" ? "No view history yet" : "No follower history yet"}
+              </p>
+              <p className="text-xs text-zinc-600 mt-1">
+                {chartTab === "views"
+                  ? "Sync this account to start collecting daily stats"
+                  : "Sync this account to record follower snapshots"}
+              </p>
             </div>
           ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -504,7 +585,7 @@ export default function AccountDetailPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
               <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false} interval={Math.floor(activeDays / 6)} />
               <YAxis tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false}
-                tickFormatter={(v: number) => chartTab === "views" ? `${(v / 1000000).toFixed(1)}M` : formatNumber(v)} />
+                tickFormatter={(v: number) => chartTab === "views" ? formatChartViews(v) : formatNumber(v)} />
               <Tooltip content={<ChartTooltip />} />
               <Area type="monotone" dataKey={chartTab === "views" ? "views" : "followers"}
                 stroke="#7C3AED" strokeWidth={2} fill="url(#areaGrad)" dot={false}
@@ -574,9 +655,7 @@ export default function AccountDetailPage() {
             <span className="ml-auto text-xs text-zinc-500">{formatDate(topVideo.posted_at)}</span>
           </div>
           <div className="flex items-start gap-4 flex-wrap">
-            <div className="w-[100px] h-16 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center flex-shrink-0">
-              <Video className="w-5 h-5 text-zinc-600" />
-            </div>
+            <VideoThumbnail url={topVideo.thumbnail_url} platform={topVideo.platform} size="spotlight" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-zinc-200 mb-3 line-clamp-2">{topVideo.caption}</p>
               <div className="flex flex-wrap gap-4">
@@ -585,7 +664,6 @@ export default function AccountDetailPage() {
                   { icon: Heart,         value: formatNumber(topVideo.likes),        label: "likes",    color: "text-pink-400" },
                   { icon: MessageCircle, value: formatNumber(topVideo.comments),      label: "comments", color: "text-emerald-400" },
                   { icon: Share2,        value: formatNumber(topVideo.shares),       label: "shares",   color: "text-amber-400" },
-                  { icon: Bookmark,      value: formatNumber(topVideo.saves ?? 0),   label: "saves",    color: "text-purple-400" },
                 ].map(m => {
                   const Icon = m.icon
                   return (
@@ -662,12 +740,7 @@ export default function AccountDetailPage() {
                     className="hover:bg-white/[0.02] transition-colors cursor-pointer group">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-[72px] h-12 rounded-lg bg-white/[0.04] border border-white/[0.06] overflow-hidden flex-shrink-0 flex items-center justify-center">
-                          {video.thumbnail_url
-                            ? <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                            : <Video className="w-4 h-4 text-zinc-600" />
-                          }
-                        </div>
+                        <VideoThumbnail url={video.thumbnail_url} platform={video.platform} />
                         <p className="text-sm text-zinc-200 group-hover:text-white transition-colors line-clamp-2 max-w-[200px]">{video.caption}</p>
                       </div>
                     </td>
