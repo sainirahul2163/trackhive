@@ -1,3 +1,4 @@
+import { addDays, format, subDays } from "date-fns"
 import { supabase } from "@/lib/supabase"
 import type { TrackedAccount, TrackedVideo } from "@/types"
 
@@ -115,6 +116,75 @@ export function filterStatsByDays<T extends { date: string }>(points: T[], days:
   since.setDate(since.getDate() - days)
   const sinceStr = since.toISOString().slice(0, 10)
   return points.filter((p) => p.date >= sinceStr)
+}
+
+export type ViewsChartLabel = "Daily Views" | "Views by Post Date" | "Views History"
+
+export interface SmartChartPoint {
+  date:  string
+  views: number
+}
+
+export interface SmartChartResult {
+  points: SmartChartPoint[]
+  label:  ViewsChartLabel
+  isEmpty: boolean
+}
+
+/** Merges real daily snapshots with posted_at view proxies for gap dates. */
+export function buildSmartChartData(
+  dailyStats: DailyViewsPoint[],
+  videos: TrackedVideo[],
+  days: number,
+): SmartChartResult {
+  const endDate = new Date()
+  const startDate = subDays(endDate, days)
+  const startStr = format(startDate, "yyyy-MM-dd")
+  const endStr = format(endDate, "yyyy-MM-dd")
+
+  const statsInRange = dailyStats.filter((s) => s.date >= startStr && s.date <= endStr)
+  const videosInRange = videos.filter((v) => {
+    if (!v.posted_at) return false
+    const dateKey = format(new Date(v.posted_at), "yyyy-MM-dd")
+    return dateKey >= startStr && dateKey <= endStr
+  })
+
+  if (statsInRange.length === 0 && videosInRange.length === 0) {
+    return { points: [], label: "Daily Views", isEmpty: true }
+  }
+
+  const viewsByDate = new Map<string, number>()
+  const datesWithDailyStats = new Set<string>()
+  const datesWithProxy = new Set<string>()
+
+  for (const stat of statsInRange) {
+    datesWithDailyStats.add(stat.date)
+    viewsByDate.set(stat.date, (viewsByDate.get(stat.date) ?? 0) + stat.views)
+  }
+
+  for (const video of videosInRange) {
+    const dateKey = format(new Date(video.posted_at!), "yyyy-MM-dd")
+    if (datesWithDailyStats.has(dateKey)) continue
+    datesWithProxy.add(dateKey)
+    viewsByDate.set(dateKey, (viewsByDate.get(dateKey) ?? 0) + Number(video.views ?? 0))
+  }
+
+  const points: SmartChartPoint[] = []
+  let current = startDate
+  while (current <= endDate) {
+    const dateKey = format(current, "yyyy-MM-dd")
+    points.push({ date: dateKey, views: viewsByDate.get(dateKey) ?? 0 })
+    current = addDays(current, 1)
+  }
+
+  let label: ViewsChartLabel = "Views by Post Date"
+  if (datesWithDailyStats.size > 0 && datesWithProxy.size > 0) {
+    label = "Views History"
+  } else if (datesWithDailyStats.size > 0) {
+    label = "Daily Views"
+  }
+
+  return { points, label, isEmpty: false }
 }
 
 export interface FollowerSnapshotPoint {

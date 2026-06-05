@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/lib/platform"
 import { VideoDetailDrawer } from "@/components/analytics/video-detail-drawer"
+import { format } from "date-fns"
 import {
   fetchTrackedAccount,
   fetchTrackedVideos,
@@ -26,6 +27,7 @@ import {
   fetchAccountVideoAggregates,
   fetchFollowerSnapshots,
   filterStatsByDays,
+  buildSmartChartData,
   type DailyViewsPoint,
   type AccountVideoAggregates,
   type FollowerSnapshotPoint,
@@ -434,14 +436,19 @@ export default function AccountDetailPage() {
     }
   }
 
+  const smartViewsChart = useMemo(
+    () => buildSmartChartData(dailyStats, videos, activeDays),
+    [dailyStats, videos, activeDays],
+  )
+
   const viewsChartData = useMemo(
     (): PerformanceChartPoint[] =>
-      filterStatsByDays(dailyStats, activeDays).map((d) => ({
-        date:      new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      smartViewsChart.points.map((d) => ({
+        date:      format(new Date(`${d.date}T12:00:00`), "MMM d"),
         views:     d.views,
         followers: 0,
       })),
-    [dailyStats, activeDays],
+    [smartViewsChart],
   )
 
   const followerChartData = useMemo(
@@ -456,6 +463,8 @@ export default function AccountDetailPage() {
 
   const displayData: PerformanceChartPoint[] =
     chartTab === "views" ? viewsChartData : followerChartData
+  const chartIsEmpty =
+    chartTab === "views" ? smartViewsChart.isEmpty : followerChartData.length === 0
   const isInstagram = account?.platform === "instagram"
   const engagementData = useMemo(
     () => buildEngagementData(videos, !isInstagram),
@@ -594,7 +603,7 @@ export default function AccountDetailPage() {
                   onClick={() => setChartTab(t)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${chartTab === t ? "bg-purple-600 text-white" : "text-zinc-500 hover:text-zinc-300 bg-white/[0.03]"}`}
                 >
-                  {t === "views" ? "Daily Views" : "Follower Growth"}
+                  {t === "views" ? smartViewsChart.label : "Follower Growth"}
                 </button>
               ))}
             </div>
@@ -607,15 +616,15 @@ export default function AccountDetailPage() {
               ))}
             </div>
           </div>
-          {displayData.length === 0 ? (
+          {chartIsEmpty ? (
             <div className="flex flex-col items-center justify-center h-[220px] text-center">
               <BarChart3 className="w-8 h-8 text-zinc-700 mb-2" />
               <p className="text-sm text-zinc-500">
-                {chartTab === "views" ? "No view history yet" : "No follower history yet"}
+                {chartTab === "views" ? "No posts in this period" : "No follower history yet"}
               </p>
               <p className="text-xs text-zinc-600 mt-1">
                 {chartTab === "views"
-                  ? "Sync this account daily to build view history"
+                  ? "Try a longer range or sync after new posts go live"
                   : "Sync this account to record follower snapshots"}
               </p>
             </div>
