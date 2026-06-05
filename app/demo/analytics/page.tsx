@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Eye, TrendingUp, Users, BarChart2, ArrowUpRight, ArrowDownRight, X, Play, Zap, Lock, Bell, Mail } from "lucide-react"
+import { Plus, Eye, TrendingUp, Users, BarChart2, ArrowUpRight, ArrowDownRight, X, Play, Zap } from "lucide-react"
 import { SignupGateModal } from "@/components/demo/signup-gate-modal"
 
 interface Creator {
@@ -10,9 +10,7 @@ interface Creator {
   platform: string
   platformColor: string
   followers: string
-  /** "—" for Instagram */
   views: string
-  /** "—" for Instagram */
   avg: string
   growth: string
   engagement: string
@@ -25,17 +23,10 @@ interface Creator {
 const MOCK_ACCOUNTS: Creator[] = [
   { id: 1, handle: "@fitnessfiona",  platform: "TikTok",    platformColor: "#fafafa", followers: "1.1M", views: "38.2M", avg: "940K", growth: "+22%", engagement: "7.4%", virality: 9.1, lastPost: "2d ago",  videos: 42, avatar: "FF" },
   { id: 2, handle: "@mikecreates",   platform: "TikTok",    platformColor: "#fafafa", followers: "890K", views: "24.1M", avg: "680K", growth: "+18%", engagement: "6.8%", virality: 8.6, lastPost: "5h ago",  videos: 38, avatar: "MC" },
-  { id: 3, handle: "@sarahlifts",    platform: "Instagram", platformColor: "#f472b6", followers: "540K", views: "—",     avg: "—",    growth: "+9%",  engagement: "5.9%", virality: 7.8, lastPost: "3d ago",  videos: 61, avatar: "SL" },
+  { id: 3, handle: "@sarahlifts",    platform: "Instagram", platformColor: "#f472b6", followers: "540K", views: "14.8M", avg: "310K", growth: "+9%",  engagement: "5.9%", virality: 7.8, lastPost: "3d ago",  videos: 61, avatar: "SL" },
   { id: 4, handle: "@techwithtom",   platform: "YouTube",   platformColor: "#f87171", followers: "280K", views: "8.4M",  avg: "190K", growth: "-3%",  engagement: "4.2%", virality: 6.2, lastPost: "21d ago", videos: 24, avatar: "TT" },
-  { id: 5, handle: "@lifestylekai",  platform: "Instagram", platformColor: "#f472b6", followers: "420K", views: "—",     avg: "—",    growth: "+14%", engagement: "6.1%", virality: 7.4, lastPost: "1d ago",  videos: 29, avatar: "LK" },
+  { id: 5, handle: "@lifestylekai",  platform: "Instagram", platformColor: "#f472b6", followers: "420K", views: "11.2M", avg: "250K", growth: "+14%", engagement: "6.1%", virality: 7.4, lastPost: "1d ago",  videos: 29, avatar: "LK" },
 ]
-
-function engagementBadgeStyle(engStr: string): { label: string; backgroundColor: string; color: string; border: string } {
-  const val = parseFloat(engStr)
-  if (val >= 5) return { label: "Excellent", backgroundColor: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }
-  if (val >= 2) return { label: "Good",      backgroundColor: "rgba(59,130,246,0.12)",  color: "#60a5fa", border: "1px solid rgba(59,130,246,0.25)" }
-  return            { label: "Average",    backgroundColor: "rgba(113,113,122,0.12)", color: "#a1a1aa", border: "1px solid rgba(113,113,122,0.25)" }
-}
 
 const MOCK_VIDEOS: Record<number, { title: string; views: string; virality: number }[]> = {
   1: [
@@ -86,11 +77,8 @@ export default function DemoAnalyticsPage() {
   const [gateOpen, setGateOpen] = useState(false)
   const [gateFeature, setGateFeature] = useState("this feature")
   const [selected, setSelected] = useState<Creator | null>(null)
-  const [igBannerDismissed, setIgBannerDismissed] = useState(false)
 
   function openGate(feature: string) { setGateFeature(feature); setGateOpen(true) }
-
-  const hasInstagramAccounts = MOCK_ACCOUNTS.some(a => a.platform === "Instagram")
 
   return (
     <div style={{ position: "relative" }}>
@@ -133,20 +121,6 @@ export default function DemoAnalyticsPage() {
           })}
         </div>
 
-        {/* Instagram data-limitation banner */}
-        {hasInstagramAccounts && !igBannerDismissed && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 16px", borderRadius: "10px", border: "1px solid rgba(245,158,11,0.2)", backgroundColor: "rgba(245,158,11,0.05)" }}>
-            <BarChart2 style={{ width: "15px", height: "15px", color: "#fbbf24", flexShrink: 0, marginTop: "1px" }} />
-            <p style={{ fontSize: "12px", color: "#fde68a", flex: 1, lineHeight: 1.5 }}>
-              <span style={{ fontWeight: 700 }}>Instagram view counts are restricted by Meta.</span>{" "}
-              Engagement rate (likes + comments ÷ followers) is shown instead.
-            </p>
-            <button onClick={() => setIgBannerDismissed(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "#f59e0b", flexShrink: 0, padding: 0 }}>
-              <X style={{ width: "14px", height: "14px" }} />
-            </button>
-          </div>
-        )}
-
         {/* Accounts table */}
         <div style={{ borderRadius: "12px", border: "1px solid rgba(255,255,255,0.06)", backgroundColor: "#111111", overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
@@ -168,8 +142,6 @@ export default function DemoAnalyticsPage() {
               <tbody>
                 {MOCK_ACCOUNTS.map(a => {
                   const isPos = a.growth.startsWith("+")
-                  const isIg  = a.platform === "Instagram"
-                  const badge = engagementBadgeStyle(a.engagement)
                   return (
                     <tr key={a.id}
                       style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: "pointer", transition: "background-color 150ms" }}
@@ -179,15 +151,8 @@ export default function DemoAnalyticsPage() {
                     >
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div style={{ position: "relative", flexShrink: 0 }}>
-                            <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <span style={{ fontSize: "10px", fontWeight: 700, color: "#a78bfa" }}>{a.avatar}</span>
-                            </div>
-                            {isIg && (
-                              <div style={{ position: "absolute", bottom: "-2px", right: "-2px", width: "13px", height: "13px", borderRadius: "50%", backgroundColor: "#111111", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <Lock style={{ width: "8px", height: "8px", color: "#fbbf24" }} />
-                              </div>
-                            )}
+                          <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <span style={{ fontSize: "10px", fontWeight: 700, color: "#a78bfa" }}>{a.avatar}</span>
                           </div>
                           <span style={{ fontSize: "13px", fontWeight: 600, color: "#e4e4e7" }}>{a.handle}</span>
                         </div>
@@ -198,27 +163,14 @@ export default function DemoAnalyticsPage() {
                       <td style={{ padding: "12px 16px", textAlign: "center" }}>
                         <span style={{ fontSize: "13px", color: "#a1a1aa" }}>{a.followers}</span>
                       </td>
-                      {/* Total Views — "—" for Instagram */}
                       <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                        {isIg ? (
-                          <span title="Instagram restricts view data to account owners" style={{ fontSize: "13px", fontWeight: 600, color: "#52525b", cursor: "help" }}>—</span>
-                        ) : (
-                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#e4e4e7" }}>{a.views}</span>
-                        )}
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#e4e4e7" }}>{a.views}</span>
                       </td>
-                      {/* Avg / Video — "—" for Instagram */}
                       <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                        {isIg ? (
-                          <span title="Instagram restricts view data to account owners" style={{ fontSize: "13px", color: "#52525b", cursor: "help" }}>—</span>
-                        ) : (
-                          <span style={{ fontSize: "13px", color: "#a1a1aa" }}>{a.avg}</span>
-                        )}
+                        <span style={{ fontSize: "13px", color: "#a1a1aa" }}>{a.avg}</span>
                       </td>
-                      {/* Engagement — colored badge */}
                       <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "99px", fontSize: "11px", fontWeight: 700, ...badge }}>
-                          {a.engagement} · {badge.label}
-                        </span>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#60a5fa" }}>{a.engagement}</span>
                       </td>
                       <td style={{ padding: "12px 16px", textAlign: "center" }}>
                         <ViralityBadge score={a.virality} />
@@ -248,7 +200,6 @@ export default function DemoAnalyticsPage() {
         <>
           <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 40 }} onClick={() => setSelected(null)} />
           <div style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: "min(420px, 100vw)", backgroundColor: "#111111", borderLeft: "1px solid rgba(255,255,255,0.08)", zIndex: 50, overflowY: "auto", padding: "24px" }}>
-            {/* Header */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "24px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <div style={{ width: "44px", height: "44px", borderRadius: "50%", backgroundColor: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -264,28 +215,22 @@ export default function DemoAnalyticsPage() {
               </button>
             </div>
 
-            {/* Key metrics */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "24px" }}>
-              {(() => {
-                const isIg = selected.platform === "Instagram"
-                const metrics = [
-                  { label: "Followers",   value: selected.followers },
-                  { label: isIg ? "Views (restricted)" : "Total Views", value: isIg ? "—" : selected.views, dim: isIg },
-                  { label: isIg ? "Avg / Post (restricted)" : "Avg / Video", value: isIg ? "—" : selected.avg, dim: isIg },
-                  { label: "Engagement",  value: selected.engagement },
-                  { label: "Virality",    value: String(selected.virality) },
-                  { label: isIg ? "Posts" : "Videos", value: String(selected.videos) },
-                ]
-                return metrics.map(s => (
-                  <div key={s.label} style={{ padding: "12px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.02)" }}>
-                    <p style={{ fontSize: "10px", color: "#52525b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>{s.label}</p>
-                    <p style={{ fontSize: "16px", fontWeight: 700, color: s.dim ? "#52525b" : "#fafafa" }}>{s.value}</p>
-                  </div>
-                ))
-              })()}
+              {[
+                { label: "Followers",   value: selected.followers },
+                { label: "Total Views", value: selected.views     },
+                { label: "Avg / Video", value: selected.avg       },
+                { label: "Engagement",  value: selected.engagement},
+                { label: "Virality",    value: String(selected.virality) },
+                { label: "Videos",      value: String(selected.videos)   },
+              ].map(s => (
+                <div key={s.label} style={{ padding: "12px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.02)" }}>
+                  <p style={{ fontSize: "10px", color: "#52525b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>{s.label}</p>
+                  <p style={{ fontSize: "16px", fontWeight: 700, color: "#fafafa" }}>{s.value}</p>
+                </div>
+              ))}
             </div>
 
-            {/* Growth */}
             <div style={{ padding: "12px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.02)", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: "13px", color: "#71717a" }}>30-day growth</span>
               <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -296,7 +241,6 @@ export default function DemoAnalyticsPage() {
               </div>
             </div>
 
-            {/* Top videos */}
             <p style={{ fontSize: "12px", fontWeight: 700, color: "#52525b", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>Top Videos</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" }}>
               {(MOCK_VIDEOS[selected.id] ?? []).map((v, i) => (
@@ -315,39 +259,6 @@ export default function DemoAnalyticsPage() {
               ))}
             </div>
 
-            {/* Connect Instagram CTA (for Instagram accounts) */}
-            {selected.platform === "Instagram" && (
-              <div style={{ borderRadius: "12px", border: "1px solid rgba(124,58,237,0.25)", backgroundColor: "rgba(124,58,237,0.05)", padding: "16px", marginBottom: "16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                  <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Eye style={{ width: "14px", height: "14px", color: "white" }} />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: "13px", fontWeight: 700, color: "#fafafa", marginBottom: "2px" }}>Unlock Instagram View Counts</p>
-                    <p style={{ fontSize: "11px", color: "#71717a" }}>Meta restricts view data to account owners only</p>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ flex: 1, position: "relative" }}>
-                    <Mail style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", width: "12px", height: "12px", color: "#52525b" }} />
-                    <input
-                      type="email"
-                      placeholder="your@email.com"
-                      style={{ width: "100%", padding: "8px 10px 8px 28px", borderRadius: "8px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#e4e4e7", fontSize: "12px", outline: "none", boxSizing: "border-box" }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => openGate("Instagram view counts")}
-                    style={{ display: "flex", alignItems: "center", gap: "4px", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(124,58,237,0.4)", backgroundColor: "rgba(124,58,237,0.1)", color: "#c084fc", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
-                  >
-                    <Bell style={{ width: "12px", height: "12px" }} />
-                    Notify me
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Gate CTA */}
             <div style={{ borderRadius: "12px", border: "1px solid rgba(124,58,237,0.25)", backgroundColor: "rgba(124,58,237,0.06)", padding: "20px", textAlign: "center" }}>
               <p style={{ fontSize: "13px", fontWeight: 700, color: "#fafafa", marginBottom: "6px" }}>See full analytics for {selected.handle}</p>
               <p style={{ fontSize: "12px", color: "#71717a", marginBottom: "16px", lineHeight: 1.5 }}>30-day trend charts, engagement breakdown, weekly posting patterns, and more.</p>

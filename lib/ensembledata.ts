@@ -40,29 +40,34 @@ export interface TikTokVideo {
 }
 
 export interface InstagramUserInfo {
+  /** Numeric Instagram user ID (pk) — required for /instagram/user/reels */
+  user_id:         number
   username:        string
   full_name:       string
   avatar_url:      string
   follower_count:  number
   following_count: number
   post_count:      number
-  /** Always false — Meta does not expose view counts to third-party apps */
-  views_available: false
-  /** Pre-calculated: average (likes + comments) / followers * 100 across recent posts */
+  /** Reels endpoint exposes view_count and play_count */
+  views_available: true
+  /** Pre-calculated across recent reels: (likes + comments) / views * 100 */
   engagement_rate: number
 }
 
 export interface InstagramPost {
   id:              string
+  /** Instagram shortcode — used for /reel/{shortcode}/ URLs */
+  shortcode:       string
   caption:         string
   thumbnail:       string
-  /** Always null — Instagram does not expose view counts to third-party apps */
-  views:           null
-  /** Always false */
-  views_available: false
+  /** view_count from /instagram/user/reels */
+  views:           number
+  /** play_count from /instagram/user/reels (IG-only plays, separate from views) */
+  play_count:      number
+  views_available: true
   likes:           number
   comments:        number
-  /** Per-post engagement: (likes + comments) / followers * 100 */
+  /** Per-reel engagement: (likes + comments) / views * 100 */
   engagement_rate: number
   created_at:      string
 }
@@ -106,6 +111,13 @@ interface TTPostRaw {
   }
 }
 
+interface IGUserInfoRaw {
+  pk:              string
+  username:        string
+  full_name:       string
+  profile_pic_url:   string
+}
+
 interface IGDetailedRaw {
   username:                   string
   full_name:                  string
@@ -115,19 +127,20 @@ interface IGDetailedRaw {
   edge_owner_to_timeline_media: { count: number }
 }
 
-interface IGPostNodeRaw {
-  id:                    string
-  edge_media_to_caption: { edges: { node: { text: string } }[] }
-  taken_at_timestamp:    number
-  display_url:           string
-  thumbnail_src:         string
-  edge_liked_by:         { count: number }
-  edge_media_to_comment: { count: number }
-  video_view_count?:     number
+interface IGReelMediaRaw {
+  pk:              string
+  code:            string
+  taken_at:        number
+  like_count:      number
+  comment_count:   number
+  view_count:      number
+  play_count:      number
+  caption?:        { text: string }
+  image_versions2?: { candidates?: { url: string }[] }
 }
 
-interface IGPostsRaw {
-  posts: { node: IGPostNodeRaw }[]
+interface IGReelsRaw {
+  reels: { media: IGReelMediaRaw }[]
 }
 
 // ─── In-process 1-hour cache ──────────────────────────────────────────────────
@@ -234,42 +247,98 @@ export async function getTikTokUserVideos(username: string, depth = 1): Promise<
   return posts
 }
 
+// ─── Instagram helpers ────────────────────────────────────────────────────────
+
+/** Step 1: resolve username → numeric user_id (pk) via /instagram/user/info */
+async function resolveInstagramUserId(username: string): Promise<number> {
+  const cacheKey = `ig:pk:${username}`
+  const cached = fromCache<number>(cacheKey)
+  if (cached) return cached
+
+  const raw = await ed<IGUserInfoRaw>("/instagram/user/info", { username })
+  const userId = parseInt(raw.pk, 10)
+  if (!userId || Number.isNaN(userId)) {
+    throw new EnsembleDataError(422, `Could not resolve Instagram user_id for @${username}`)
+  }
+
+  toCache(cacheKey, userId)
+  return userId
+}
+
+function reelEngagementRate(views: number, likes: number, comments: number): number {
+  if (views <= 0) return 0
+  return Math.round(((likes + comments) / views) * 100 * 100) / 100
+}
+
+function mapInstagramReels(reels: IGReelsRaw["reels"]): InstagramPost[] {
+  return (reels ?? []).map(({ media: m }) => {
+    const likes    = m.like_count    ?? 0
+    const comments = m.comment_count ?? 0
+    const views    = m.view_count    ?? 0
+    const playCount = m.play_count   ?? 0
+
+    return {
+      id:              m.pk,
+      shortcode:       m.code,
+      caption:         m.caption?.text ?? "",
+      thumbnail:       m.image_versions2?.candidates?.[0]?.url ?? "",
+      views,
+      play_count:      playCount,
+      views_available: true as const,
+      likes,
+      comments,
+      engagement_rate: reelEngagementRate(views, likes, comments),
+      created_at:      new Date((m.taken_at ?? 0) * 1000).toISOString(),
+    }
+  })
+}
+
+function accountEngagementFromReels(reels: InstagramPost[]): number {
+  if (!reels.length) return 0
+  const totalViews = reels.reduce((s, r) => s + r.views, 0)
+  if (!totalViews) return 0
+  const totalEngage = reels.reduce((s, r) => s + r.likes + r.comments, 0)
+  return Math.round((totalEngage / totalViews) * 100 * 100) / 100
+}
+
 // ─── 3. Instagram User Info ───────────────────────────────────────────────────
-// Uses /instagram/user/detailed-info (10 units) — has follower counts.
-// NOTE: Instagram does NOT provide view counts to third-party apps via EnsembleData.
-//       Only likes, comments, followers, and post counts are available.
+// Step 1: /instagram/user/info → user_id (pk)
+// Step 2: /instagram/user/detailed-info → follower counts
+// Engagement rate calculated from /instagram/user/reels view_count data.
 
 export async function getInstagramUserInfo(username: string): Promise<InstagramUserInfo> {
   const cacheKey = `ig:info:${username}`
   const cached = fromCache<InstagramUserInfo>(cacheKey)
   if (cached) return cached
 
-  const raw = await ed<IGDetailedRaw>("/instagram/user/detailed-info", { username })
+  const [basic, detailed] = await Promise.all([
+    ed<IGUserInfoRaw>("/instagram/user/info", { username }),
+    ed<IGDetailedRaw>("/instagram/user/detailed-info", { username }),
+  ])
 
-  const followerCount = raw.edge_followed_by?.count ?? 0
+  const userId = parseInt(basic.pk, 10)
+  if (!userId || Number.isNaN(userId)) {
+    throw new EnsembleDataError(422, `Could not resolve Instagram user_id for @${username}`)
+  }
+  toCache(`ig:pk:${username}`, userId)
 
-  // Try to fetch recent posts for engagement rate calculation
   let engagementRate = 0
   try {
-    const posts = await ed<IGPostsRaw>("/instagram/user/posts", { username })
-    const nodes = posts?.posts ?? []
-    if (nodes.length > 0 && followerCount > 0) {
-      const totalLikes    = nodes.reduce((s, { node: p }) => s + (p.edge_liked_by?.count ?? 0), 0)
-      const totalComments = nodes.reduce((s, { node: p }) => s + (p.edge_media_to_comment?.count ?? 0), 0)
-      engagementRate = Math.round(((totalLikes + totalComments) / nodes.length / followerCount) * 100 * 100) / 100
-    }
+    const reelsRaw = await ed<IGReelsRaw>("/instagram/user/reels", { user_id: userId, depth: 1 })
+    engagementRate = accountEngagementFromReels(mapInstagramReels(reelsRaw?.reels ?? []))
   } catch {
-    // Non-fatal — engagement rate stays 0 if posts can't be fetched
+    // Non-fatal — engagement rate stays 0 if reels can't be fetched
   }
 
   const result: InstagramUserInfo = {
-    username:        raw.username,
-    full_name:       raw.full_name ?? "",
-    avatar_url:      raw.profile_pic_url ?? "",
-    follower_count:  followerCount,
-    following_count: raw.edge_follow?.count                 ?? 0,
-    post_count:      raw.edge_owner_to_timeline_media?.count ?? 0,
-    views_available: false,
+    user_id:         userId,
+    username:        detailed.username || basic.username,
+    full_name:       detailed.full_name || basic.full_name || "",
+    avatar_url:      detailed.profile_pic_url || basic.profile_pic_url || "",
+    follower_count:  detailed.edge_followed_by?.count ?? 0,
+    following_count: detailed.edge_follow?.count ?? 0,
+    post_count:      detailed.edge_owner_to_timeline_media?.count ?? 0,
+    views_available: true,
     engagement_rate: engagementRate,
   }
 
@@ -277,40 +346,22 @@ export async function getInstagramUserInfo(username: string): Promise<InstagramU
   return result
 }
 
-// ─── 4. Instagram User Posts ──────────────────────────────────────────────────
-// NOTE: `views` is always null — Instagram does not expose view counts to
-//       third-party applications. Engagement rate is calculated from
-//       (likes + comments) / followers * 100.
+// ─── 4. Instagram User Reels (posts with views) ───────────────────────────────
+// Step 1: /instagram/user/info → user_id (pk)
+// Step 2: /instagram/user/reels → view_count, play_count, like_count, comment_count
 
 export async function getInstagramUserPosts(
-  username:      string,
-  followerCount = 0,
+  username: string,
+  depth = 1,
 ): Promise<InstagramPost[]> {
-  const cacheKey = `ig:posts:${username}`
+  const cacheKey = `ig:reels:${username}:${depth}`
   const cached = fromCache<InstagramPost[]>(cacheKey)
   if (cached) return cached
 
-  const raw = await ed<IGPostsRaw>("/instagram/user/posts", { username })
+  const userId = await resolveInstagramUserId(username)
+  const raw = await ed<IGReelsRaw>("/instagram/user/reels", { user_id: userId, depth })
 
-  const posts: InstagramPost[] = (raw?.posts ?? []).map(({ node: p }) => {
-    const likes    = p.edge_liked_by?.count         ?? 0
-    const comments = p.edge_media_to_comment?.count ?? 0
-    const engRate  = followerCount > 0
-      ? Math.round(((likes + comments) / followerCount) * 100 * 100) / 100
-      : 0
-
-    return {
-      id:              p.id,
-      caption:         p.edge_media_to_caption?.edges?.[0]?.node?.text ?? "",
-      thumbnail:       p.thumbnail_src || p.display_url || "",
-      views:           null,           // Instagram does not provide view counts
-      views_available: false,
-      likes,
-      comments,
-      engagement_rate: engRate,
-      created_at:      new Date(p.taken_at_timestamp * 1000).toISOString(),
-    }
-  })
+  const posts = mapInstagramReels(raw?.reels ?? [])
 
   toCache(cacheKey, posts)
   return posts
@@ -319,7 +370,7 @@ export async function getInstagramUserPosts(
 // ─── Platform capability map ──────────────────────────────────────────────────
 
 export const PLATFORM_LIMITATIONS = {
-  instagram: { views: false,  saves: false, shares: false },
+  instagram: { views: true,   saves: false, shares: false },
   tiktok:    { views: true,   saves: false, shares: true  },
   youtube:   { views: true,   saves: false, shares: false },
   facebook:  { views: false,  saves: false, shares: false },

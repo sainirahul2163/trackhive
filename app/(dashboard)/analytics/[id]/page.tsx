@@ -7,7 +7,7 @@ import {
   ArrowLeft, RefreshCw, ExternalLink, TrendingUp,
   Eye, BarChart3, Video, ArrowUpRight, ArrowDownRight,
   AlertCircle, DollarSign, Heart, MessageCircle, Share2,
-  Bookmark, Plus, Users, Zap, ChevronDown, Lock, Mail, Bell,
+  Bookmark, Plus, Users, Zap, ChevronDown,
 } from "lucide-react"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -279,10 +279,7 @@ export default function AccountDetailPage() {
   const [selectedVideo,    setSelectedVideo]    = useState<TrackedVideo | null>(null)
   const [videoDrawerOpen,  setVideoDrawerOpen]  = useState(false)
   const [campaignModalOpen, setCampaignModalOpen] = useState(false)
-  const [videoSort,       setVideoSort]       = useState<"views" | "virality" | "date" | "engagement">("views")
-  const [waitlistEmail,   setWaitlistEmail]   = useState("")
-  const [waitlistSent,    setWaitlistSent]    = useState(false)
-  const [waitlistLoading, setWaitlistLoading] = useState(false)
+  const [videoSort,  setVideoSort]  = useState<"views" | "virality" | "date">("views")
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -328,9 +325,6 @@ export default function AccountDetailPage() {
       return dailyStats.map((d) => ({
         date:      new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         views:     d.views,
-        likes:     d.likes,
-        comments:  d.comments,
-        engagement: d.likes + d.comments,
         followers: 0,
       }))
     }
@@ -342,26 +336,10 @@ export default function AccountDetailPage() {
   const weeklyData = useMemo(() => buildWeeklyData(id.charCodeAt(0)), [id])
 
   const sortedVideos = useMemo(() => [...videos].sort((a, b) => {
-    if (videoSort === "views")      return (b.views ?? 0) - (a.views ?? 0)
-    if (videoSort === "virality")   return b.virality_score - a.virality_score
-    if (videoSort === "engagement") return b.engagement_rate - a.engagement_rate
+    if (videoSort === "views")    return (b.views ?? 0) - (a.views ?? 0)
+    if (videoSort === "virality") return b.virality_score - a.virality_score
     return new Date(b.posted_at ?? 0).getTime() - new Date(a.posted_at ?? 0).getTime()
   }), [videos, videoSort])
-
-  async function handleWaitlistSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!waitlistEmail.trim()) return
-    setWaitlistLoading(true)
-    try {
-      await fetch("/api/waitlist/instagram", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ email: waitlistEmail }),
-      })
-      setWaitlistSent(true)
-    } catch { setWaitlistSent(true) }
-    finally  { setWaitlistLoading(false) }
-  }
 
   const topVideo = sortedVideos[0]
 
@@ -387,28 +365,17 @@ export default function AccountDetailPage() {
   }
 
   if (!account) return null
-  const cfg       = PLATFORM_CONFIG[account.platform]
-  const isIg      = account.platform === "instagram"
+  const cfg = PLATFORM_CONFIG[account.platform]
 
-  // Estimated CPM & revenue — only meaningful for platforms with views
   const estCpm     = ((account.engagement_rate / 10) * 8 + 6).toFixed(2)
-  const estMonthly = isIg ? null : (((account.avg_views ?? 0) * 4 * parseFloat(estCpm)) / 1000).toFixed(0)
+  const estMonthly = (((account.avg_views ?? 0) * 4 * parseFloat(estCpm)) / 1000).toFixed(0)
 
-  const statCards = isIg
-    ? [
-        { label: "Followers",         value: formatNumber(account.follower_count),          icon: Users,      color: "text-purple-400",  bg: "bg-purple-500/10",  change: "",      up: true  },
-        { label: "Posts Tracked",     value: String(videos.length),                          icon: BarChart3,  color: "text-blue-400",    bg: "bg-blue-500/10",    change: "",      up: true  },
-        { label: "Engagement Rate",   value: `${account.engagement_rate.toFixed(1)}%`,       icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10", change: "",      up: true  },
-        { label: "Avg Post Eng.",     value: videos.length
-            ? `${(videos.reduce((s, v) => s + v.engagement_rate, 0) / videos.length).toFixed(1)}%`
-            : "—",                                                                            icon: Heart,      color: "text-pink-400",    bg: "bg-pink-500/10",    change: "",      up: true  },
-      ]
-    : [
-        { label: "Total Views",       value: formatNumber(account.total_views ?? 0),         icon: Eye,        color: "text-blue-400",    bg: "bg-blue-500/10",    change: "+18.2%", up: true  },
-        { label: "Avg Views / Video", value: formatNumber(account.avg_views ?? 0),            icon: BarChart3,  color: "text-purple-400",  bg: "bg-purple-500/10",  change: "+5.4%",  up: true  },
-        { label: "Engagement Rate",   value: `${account.engagement_rate.toFixed(1)}%`,        icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10", change: "-0.3%",  up: false },
-        { label: "Est. CPM",          value: `$${estCpm}`,                                    icon: DollarSign, color: "text-amber-400",   bg: "bg-amber-500/10",   change: "+$1.20", up: true  },
-      ]
+  const statCards = [
+    { label: "Total Views",       value: formatNumber(account.total_views ?? 0),  icon: Eye,        color: "text-blue-400",    bg: "bg-blue-500/10",    change: "+18.2%", up: true  },
+    { label: "Avg Views / Video", value: formatNumber(account.avg_views ?? 0),     icon: BarChart3,  color: "text-purple-400",  bg: "bg-purple-500/10",  change: "+5.4%",  up: true  },
+    { label: "Engagement Rate",   value: `${account.engagement_rate.toFixed(1)}%`, icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10", change: "-0.3%",  up: false },
+    { label: "Est. CPM",          value: `$${estCpm}`,                             icon: DollarSign, color: "text-amber-400",   bg: "bg-amber-500/10",   change: "+$1.20", up: true  },
+  ]
 
   const PIE_COLORS = ["#a855f7", "#3b82f6", "#10b981", "#f59e0b"]
 
@@ -442,9 +409,7 @@ export default function AccountDetailPage() {
               </span>
             </div>
             <p className="text-sm text-zinc-500">@{account.username} · {formatNumber(account.follower_count)} followers</p>
-            {estMonthly && (
-              <p className="text-xs text-zinc-600 mt-0.5">Est. monthly revenue: <span className="text-emerald-400 font-semibold">${parseInt(estMonthly).toLocaleString()}</span></p>
-            )}
+            <p className="text-xs text-zinc-600 mt-0.5">Est. monthly revenue: <span className="text-emerald-400 font-semibold">${parseInt(estMonthly).toLocaleString()}</span></p>
             {account.last_synced_at && (
               <p className="text-xs text-zinc-600 mt-0.5">Last synced: <span className="text-zinc-500">{timeAgo(account.last_synced_at)}</span></p>
             )}
@@ -487,22 +452,15 @@ export default function AccountDetailPage() {
         <div className="xl:col-span-2 rounded-xl border border-white/[0.06] bg-[#111111] p-5">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              {isIg ? (
-                <div>
-                  <span className="text-[14px] font-semibold text-white">Engagement Activity</span>
-                  <p className="text-xs text-zinc-500">Likes + Comments — Last {activeDays} days</p>
-                </div>
-              ) : (
-                (["views", "followers"] as ChartTab[]).map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setChartTab(t)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${chartTab === t ? "bg-purple-600 text-white" : "text-zinc-500 hover:text-zinc-300 bg-white/[0.03]"}`}
-                  >
-                    {t === "views" ? "Daily Views" : "Follower Growth"}
-                  </button>
-                ))
-              )}
+              {(["views", "followers"] as ChartTab[]).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setChartTab(t)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${chartTab === t ? "bg-purple-600 text-white" : "text-zinc-500 hover:text-zinc-300 bg-white/[0.03]"}`}
+                >
+                  {t === "views" ? "Daily Views" : "Follower Growth"}
+                </button>
+              ))}
             </div>
             <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5">
               {DATE_TABS.map(tab => (
@@ -524,10 +482,9 @@ export default function AccountDetailPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
               <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false} interval={Math.floor(activeDays / 6)} />
               <YAxis tick={{ fill: "#52525b", fontSize: 11 }} tickLine={false} axisLine={false}
-                tickFormatter={(v: number) => formatNumber(v)} />
+                tickFormatter={(v: number) => chartTab === "views" ? `${(v / 1000000).toFixed(1)}M` : formatNumber(v)} />
               <Tooltip content={<ChartTooltip />} />
-              <Area type="monotone"
-                dataKey={isIg ? "engagement" : chartTab === "views" ? "views" : "followers"}
+              <Area type="monotone" dataKey={chartTab === "views" ? "views" : "followers"}
                 stroke="#7C3AED" strokeWidth={2} fill="url(#areaGrad)" dot={false}
                 activeDot={{ r: 4, fill: "#7C3AED", stroke: "#0a0a0a", strokeWidth: 2 }}
               />
@@ -597,15 +554,11 @@ export default function AccountDetailPage() {
               <p className="text-sm font-medium text-zinc-200 mb-3 line-clamp-2">{topVideo.caption}</p>
               <div className="flex flex-wrap gap-4">
                 {[
-                  ...(!isIg ? [{ icon: Eye, value: formatNumber(topVideo.views ?? 0), label: "views", color: "text-blue-400" }] : []),
-                  { icon: Heart,         value: formatNumber(topVideo.likes),         label: "likes",    color: "text-pink-400" },
-                  { icon: MessageCircle, value: formatNumber(topVideo.comments),       label: "comments", color: "text-emerald-400" },
-                  ...(!isIg ? [
-                    { icon: Share2,   value: formatNumber(topVideo.shares),        label: "shares", color: "text-amber-400" },
-                    { icon: Bookmark, value: formatNumber(topVideo.saves ?? 0),    label: "saves",  color: "text-purple-400" },
-                  ] : [
-                    { icon: TrendingUp, value: `${topVideo.engagement_rate.toFixed(1)}%`, label: "engagement", color: "text-emerald-400" },
-                  ]),
+                  { icon: Eye,           value: formatNumber(topVideo.views ?? 0), label: "views",    color: "text-blue-400" },
+                  { icon: Heart,         value: formatNumber(topVideo.likes),        label: "likes",    color: "text-pink-400" },
+                  { icon: MessageCircle, value: formatNumber(topVideo.comments),      label: "comments", color: "text-emerald-400" },
+                  { icon: Share2,        value: formatNumber(topVideo.shares),       label: "shares",   color: "text-amber-400" },
+                  { icon: Bookmark,      value: formatNumber(topVideo.saves ?? 0),   label: "saves",    color: "text-purple-400" },
                 ].map(m => {
                   const Icon = m.icon
                   return (
@@ -636,15 +589,14 @@ export default function AccountDetailPage() {
             <p className="text-xs text-zinc-500 mt-0.5">Click any row for full details</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">{videos.length} {isIg ? "posts" : "videos"}</span>
+            <span className="text-xs text-zinc-500">{videos.length} videos</span>
             <div className="relative">
               <select
                 value={videoSort}
                 onChange={e => setVideoSort(e.target.value as typeof videoSort)}
                 className="appearance-none pl-3 pr-7 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-xs text-zinc-300 outline-none cursor-pointer"
               >
-                {!isIg && <option value="views">Sort: Views</option>}
-                <option value="engagement">Sort: Engagement</option>
+                <option value="views">Sort: Views</option>
                 <option value="virality">Sort: Virality</option>
                 <option value="date">Sort: Date</option>
               </select>
@@ -657,17 +609,12 @@ export default function AccountDetailPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/[0.04]">
-                <th className="text-left px-5 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">{isIg ? "Post" : "Video"}</th>
+                <th className="text-left px-5 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Video</th>
                 <th className="text-left px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Posted</th>
-                <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
-                  {isIg ? <span className="flex items-center gap-1 justify-end"><Lock className="w-3 h-3 text-zinc-600" />Views</span> : "Views"}
-                </th>
+                <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Views</th>
                 <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Likes</th>
                 <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Comments</th>
-                {isIg
-                  ? <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Engagement</th>
-                  : <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Shares</th>
-                }
+                <th className="text-right px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Shares</th>
                 <th className="text-center px-4 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Virality</th>
               </tr>
             </thead>
@@ -689,23 +636,15 @@ export default function AccountDetailPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4"><span className="text-xs text-zinc-500 whitespace-nowrap">{formatDate(video.posted_at)}</span></td>
-                    {/* Views — dash for Instagram */}
                     <td className="px-4 py-4 text-right">
-                      {isIg ? (
-                        <span className="text-sm text-zinc-600 cursor-help" title="Instagram restricts view data to account owners">—</span>
-                      ) : (
-                        <div className="flex items-center justify-end gap-1">
-                          <ArrowUpRight className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                          <span className="text-sm font-medium text-zinc-200">{formatNumber(video.views ?? 0)}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        <ArrowUpRight className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                        <span className="text-sm font-medium text-zinc-200">{formatNumber(video.views ?? 0)}</span>
+                      </div>
                     </td>
-                    <td className="px-4 py-4 text-right"><span className="text-sm font-medium text-pink-400">{formatNumber(video.likes)}</span></td>
+                    <td className="px-4 py-4 text-right"><span className="text-sm text-zinc-400">{formatNumber(video.likes)}</span></td>
                     <td className="px-4 py-4 text-right"><span className="text-sm text-zinc-400">{formatNumber(video.comments)}</span></td>
-                    {isIg
-                      ? <td className="px-4 py-4 text-right"><span className="text-sm font-semibold text-emerald-400">{video.engagement_rate.toFixed(1)}%</span></td>
-                      : <td className="px-4 py-4 text-right"><span className="text-sm text-zinc-400">{formatNumber(video.shares)}</span></td>
-                    }
+                    <td className="px-4 py-4 text-right"><span className="text-sm text-zinc-400">{formatNumber(video.shares)}</span></td>
                     <td className="px-4 py-4 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${vl.className}`}>{vl.label}</span>
                     </td>
@@ -718,14 +657,12 @@ export default function AccountDetailPage() {
 
         <div className="px-5 py-3 border-t border-white/[0.04] flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <p className="text-xs text-zinc-600">{videos.length} {isIg ? "post" : "video"}{videos.length !== 1 ? "s" : ""} tracked</p>
+            <p className="text-xs text-zinc-600">{videos.length} video{videos.length !== 1 ? "s" : ""} tracked</p>
             <div className="flex items-center gap-3">
-              {!isIg && (
-                <div className="flex items-center gap-1">
-                  <Eye className="w-3 h-3 text-zinc-500" />
-                  <span className="text-xs text-zinc-500">{formatNumber(videos.reduce((s, v) => s + (v.views ?? 0), 0))} total views</span>
-                </div>
-              )}
+              <div className="flex items-center gap-1">
+                <Eye className="w-3 h-3 text-zinc-500" />
+                <span className="text-xs text-zinc-500">{formatNumber(videos.reduce((s, v) => s + (v.views ?? 0), 0))} total views</span>
+              </div>
               <div className="flex items-center gap-1"><Users className="w-3 h-3 text-zinc-500" /><span className="text-xs text-zinc-500">{formatNumber(account.follower_count)} followers</span></div>
             </div>
           </div>
@@ -734,63 +671,6 @@ export default function AccountDetailPage() {
           </button>
         </div>
       </div>
-
-      {/* ── Connect Instagram CTA (Instagram accounts only) ── */}
-      {isIg && (
-        <div className="rounded-xl border border-purple-500/25 bg-purple-600/5 p-6">
-          <div className="flex items-start gap-4">
-            {/* Instagram gradient icon */}
-            <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)" }}>
-              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-[15px] font-semibold text-white mb-1">Unlock Instagram View Counts</h3>
-              <p className="text-sm text-zinc-400 leading-relaxed mb-4">
-                Connect your Instagram account to access view counts, reach, and impressions
-                directly from Meta&apos;s official API. Currently restricted by Instagram&apos;s platform policy.
-              </p>
-              {waitlistSent ? (
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <Bell className="w-4 h-4" />
-                  <span className="text-sm font-medium">You&apos;re on the list! We&apos;ll notify you when this launches.</span>
-                </div>
-              ) : (
-                <form onSubmit={handleWaitlistSubmit} className="flex items-center gap-2 flex-wrap">
-                  <div className="relative flex-1 min-w-[200px] max-w-xs">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                    <input
-                      type="email"
-                      value={waitlistEmail}
-                      onChange={e => setWaitlistEmail(e.target.value)}
-                      placeholder="your@email.com"
-                      className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/[0.06] border border-white/[0.1] text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-purple-500/50 transition-colors"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={waitlistLoading || !waitlistEmail.trim()}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-purple-500/40 text-purple-300 text-sm font-medium hover:bg-purple-600/15 transition-all disabled:opacity-50"
-                  >
-                    <Bell className="w-3.5 h-3.5" />
-                    {waitlistLoading ? "Saving…" : "Notify me"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 border border-white/[0.08] text-zinc-500 text-sm font-medium cursor-not-allowed"
-                  >
-                    Coming Soon
-                  </button>
-                </form>
-              )}
-              <p className="text-xs text-zinc-600 mt-2">We&apos;ll notify you when Instagram OAuth integration launches.</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       <VideoDetailDrawer video={selectedVideo} open={videoDrawerOpen} onOpenChange={setVideoDrawerOpen} />
       {campaignModalOpen && (

@@ -5,8 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Plus, Search, RefreshCw, Trash2, Eye,
-  Users, TrendingUp, Globe, ChevronDown, AlertCircle, X, Lock,
-  BarChart3,
+  Users, TrendingUp, Globe, ChevronDown, AlertCircle,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -17,14 +16,6 @@ import { fetchTrackedAccounts } from "@/lib/analytics-data"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/use-user"
 import type { TrackedAccount, Platform } from "@/types"
-
-const IG_BANNER_KEY = "trackhive_ig_banner_dismissed"
-
-function engagementBadge(rate: number) {
-  if (rate >= 5) return { label: "Excellent", style: { backgroundColor: "rgba(16,185,129,0.12)", color: "#34d399", borderColor: "rgba(16,185,129,0.25)" } }
-  if (rate >= 2) return { label: "Good",      style: { backgroundColor: "rgba(59,130,246,0.12)", color: "#60a5fa", borderColor: "rgba(59,130,246,0.25)" } }
-  return            { label: "Average",    style: { backgroundColor: "rgba(113,113,122,0.12)", color: "#a1a1aa", borderColor: "rgba(113,113,122,0.25)" } }
-}
 
 const PLATFORMS: { value: Platform | "all"; label: string }[] = [
   { value: "all", label: "All Platforms" },
@@ -102,19 +93,6 @@ export default function AnalyticsPage() {
   }, [])
 
   useEffect(() => { load(user?.id) }, [load, user?.id])
-
-  const [igBannerDismissed, setIgBannerDismissed] = useState(true)
-
-  useEffect(() => {
-    setIgBannerDismissed(localStorage.getItem(IG_BANNER_KEY) === "1")
-  }, [])
-
-  function dismissIgBanner() {
-    localStorage.setItem(IG_BANNER_KEY, "1")
-    setIgBannerDismissed(true)
-  }
-
-  const hasInstagramAccounts = accounts.some((a) => a.platform === "instagram")
 
   const filtered = accounts
     .filter((a) => {
@@ -252,20 +230,6 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Instagram data-limitation banner */}
-      {!loading && hasInstagramAccounts && !igBannerDismissed && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/20 bg-amber-500/5">
-          <BarChart3 className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-300 leading-relaxed flex-1">
-            <span className="font-semibold">Instagram view counts are restricted by Meta.</span>{" "}
-            Engagement rate (likes + comments ÷ followers) is shown instead.
-          </p>
-          <button onClick={dismissIgBanner} className="text-amber-500 hover:text-amber-300 transition-colors flex-shrink-0">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
       {/* Loading state */}
       {loading && <TableSkeleton />}
 
@@ -329,9 +293,7 @@ export default function AnalyticsPage() {
               </thead>
               <tbody className="divide-y divide-white/[0.03]">
                 {filtered.map((account) => {
-                  const cfg      = PLATFORM_CONFIG[account.platform]
-                  const isIg     = account.platform === "instagram"
-                  const badge    = engagementBadge(account.engagement_rate)
+                  const cfg = PLATFORM_CONFIG[account.platform]
                   return (
                     <tr
                       key={account.id}
@@ -340,19 +302,12 @@ export default function AnalyticsPage() {
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="relative flex-shrink-0">
-                            <Avatar className="w-8 h-8">
-                              <AvatarImage src={account.avatar_url ?? ""} />
-                              <AvatarFallback className="bg-purple-600/20 text-purple-400 text-xs font-bold">
-                                {account.username.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            {isIg && (
-                              <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#111111] flex items-center justify-center">
-                                <Lock className="w-2 h-2 text-amber-400" />
-                              </div>
-                            )}
-                          </div>
+                          <Avatar className="w-8 h-8 flex-shrink-0">
+                            <AvatarImage src={account.avatar_url ?? ""} />
+                            <AvatarFallback className="bg-purple-600/20 text-purple-400 text-xs font-bold">
+                              {account.username.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
                           <div>
                             <div className="flex items-center gap-1.5">
                               <span className="text-sm font-medium text-zinc-200 group-hover:text-white transition-colors">
@@ -373,43 +328,15 @@ export default function AnalyticsPage() {
                       <td className="px-4 py-3.5 text-right">
                         <span className="text-sm text-zinc-300">{formatNumber(account.follower_count)}</span>
                       </td>
-                      {/* Total Views — "—" for Instagram with tooltip */}
                       <td className="px-4 py-3.5 text-right">
-                        {isIg ? (
-                          <span
-                            className="text-sm font-medium text-zinc-600 cursor-help"
-                            title="Instagram restricts view data to account owners"
-                          >
-                            —
-                          </span>
-                        ) : (
-                          <span className="text-sm font-medium text-zinc-200">
-                            {formatNumber(account.total_views ?? 0)}
-                          </span>
-                        )}
+                        <span className="text-sm font-medium text-zinc-200">{formatNumber(account.total_views ?? 0)}</span>
                       </td>
-                      {/* Avg Views — "—" for Instagram */}
                       <td className="px-4 py-3.5 text-right">
-                        {isIg ? (
-                          <span
-                            className="text-sm text-zinc-600 cursor-help"
-                            title="Instagram restricts view data to account owners"
-                          >
-                            —
-                          </span>
-                        ) : (
-                          <span className="text-sm text-zinc-300">
-                            {formatNumber(account.avg_views ?? 0)}
-                          </span>
-                        )}
+                        <span className="text-sm text-zinc-300">{formatNumber(account.avg_views ?? 0)}</span>
                       </td>
-                      {/* Engagement badge */}
                       <td className="px-4 py-3.5 text-right">
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border"
-                          style={badge.style}
-                        >
-                          {account.engagement_rate.toFixed(1)}% · {badge.label}
+                        <span className={`text-sm font-medium ${account.engagement_rate >= 5 ? "text-emerald-400" : account.engagement_rate >= 3 ? "text-zinc-300" : "text-amber-400"}`}>
+                          {account.engagement_rate.toFixed(1)}%
                         </span>
                       </td>
                       <td className="px-4 py-3.5">
