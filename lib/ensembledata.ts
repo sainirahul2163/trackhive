@@ -82,6 +82,26 @@ interface ApifyReelRaw {
   url:            string
 }
 
+interface ApifyProfileRaw {
+  username:        string
+  fullName?:       string
+  profilePicUrl?:  string
+  followersCount?: number
+  followsCount?:  number
+  postsCount?:     number
+}
+
+export interface InstagramProfileApify {
+  username:        string
+  display_name:    string
+  avatar_url:      string
+  follower_count:  number
+  following_count: number
+  post_count:      number
+  views_available: false
+  engagement_rate: number
+}
+
 export interface YouTubeChannelInfo {
   channel_name:     string
   avatar:           string
@@ -119,22 +139,6 @@ interface TTPostRaw {
     comment_count: number
     share_count:   number
   }
-}
-
-interface IGUserInfoRaw {
-  pk:              string
-  username:        string
-  full_name:       string
-  profile_pic_url:   string
-}
-
-interface IGDetailedRaw {
-  username:                   string
-  full_name:                  string
-  profile_pic_url:            string
-  edge_followed_by:           { count: number }
-  edge_follow:                { count: number }
-  edge_owner_to_timeline_media: { count: number }
 }
 
 // ─── In-process 1-hour cache ──────────────────────────────────────────────────
@@ -248,9 +252,54 @@ function reelEngagementRate(views: number, likes: number, comments: number): num
   return Math.round(((likes + comments) / views) * 100 * 100) / 100
 }
 
-export async function fetchInstagramReelsApify(username: string): Promise<InstagramPost[]> {
+function getApifyToken(): string {
   const token = process.env.APIFY_API_TOKEN
-  if (!token) throw new EnsembleDataError(500, 'APIFY_API_TOKEN is not configured')
+  if (!token) throw new EnsembleDataError(500, "APIFY_API_TOKEN is not configured")
+  return token
+}
+
+export async function fetchInstagramProfileApify(
+  username: string,
+): Promise<InstagramProfileApify | null> {
+  const token = getApifyToken()
+
+  const cacheKey = `apify:ig:profile:${username}`
+  const cached = fromCache<InstagramProfileApify | null>(cacheKey)
+  if (cached !== null) return cached
+
+  const res = await fetch(
+    `https://api.apify.com/v2/actors/apify~instagram-profile-scraper/run-sync-get-dataset-items?token=${token}`,
+    {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ usernames: [username] }),
+      next:    { revalidate: 0 },
+    },
+  )
+
+  if (!res.ok) return null
+
+  const data = (await res.json()) as ApifyProfileRaw[]
+  const profile = data[0]
+  if (!profile) return null
+
+  const result: InstagramProfileApify = {
+    username:        profile.username ?? username,
+    display_name:    profile.fullName ?? "",
+    avatar_url:      profile.profilePicUrl ?? "",
+    follower_count:  profile.followersCount ?? 0,
+    following_count: profile.followsCount ?? 0,
+    post_count:      profile.postsCount ?? 0,
+    views_available: false,
+    engagement_rate: 0,
+  }
+
+  toCache(cacheKey, result)
+  return result
+}
+
+export async function fetchInstagramReelsApify(username: string): Promise<InstagramPost[]> {
+  const token = getApifyToken()
 
   const cacheKey = `apify:ig:reels:${username}`
   const cached = fromCache<InstagramPost[]>(cacheKey)
@@ -304,23 +353,17 @@ function accountEngagementFromReels(reels: InstagramPost[]): number {
 }
 
 // ─── 3. Instagram User Info ───────────────────────────────────────────────────
-// Profile: EnsembleData. Engagement rate: Apify reel scraper view counts.
+// Profile + engagement: Apify only (profile-scraper + reel-scraper).
 
 export async function getInstagramUserInfo(username: string): Promise<InstagramUserInfo> {
   const cacheKey = `ig:info:${username}`
   const cached = fromCache<InstagramUserInfo>(cacheKey)
   if (cached) return cached
 
-  const [basic, detailed] = await Promise.all([
-    ed<IGUserInfoRaw>("/instagram/user/info", { username }),
-    ed<IGDetailedRaw>("/instagram/user/detailed-info", { username }),
-  ])
-
-  const userId = parseInt(basic.pk, 10)
-  if (!userId || Number.isNaN(userId)) {
-    throw new EnsembleDataError(422, `Could not resolve Instagram user_id for @${username}`)
+  const profile = await fetchInstagramProfileApify(username)
+  if (!profile) {
+    throw new EnsembleDataError(404, `Instagram profile not found for @${username}`)
   }
-  toCache(`ig:pk:${username}`, userId)
 
   let engagementRate = 0
   try {
@@ -331,13 +374,13 @@ export async function getInstagramUserInfo(username: string): Promise<InstagramU
   }
 
   const result: InstagramUserInfo = {
-    user_id:         userId,
-    username:        detailed.username || basic.username,
-    full_name:       detailed.full_name || basic.full_name || "",
-    avatar_url:      detailed.profile_pic_url || basic.profile_pic_url || "",
-    follower_count:  detailed.edge_followed_by?.count ?? 0,
-    following_count: detailed.edge_follow?.count ?? 0,
-    post_count:      detailed.edge_owner_to_timeline_media?.count ?? 0,
+    user_id:         0,
+    username:        profile.username,
+    full_name:       profile.display_name,
+    avatar_url:      profile.avatar_url,
+    follower_count:  profile.follower_count,
+    following_count: profile.following_count,
+    post_count:      profile.post_count,
     views_available: true,
     engagement_rate: engagementRate,
   }

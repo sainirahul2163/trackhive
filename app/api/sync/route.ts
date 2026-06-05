@@ -3,7 +3,7 @@ import { createServerSupabase } from "@/lib/supabase-server"
 import {
   getTikTokUserInfo,
   getTikTokUserVideos,
-  getInstagramUserInfo,
+  fetchInstagramProfileApify,
   fetchInstagramReelsApify,
   EnsembleDataError,
   PLATFORM_LIMITATIONS,
@@ -178,16 +178,23 @@ async function syncTikTok(
 }
 
 // ─── Instagram sync ───────────────────────────────────────────────────────────
-// Profile info: EnsembleData. Reels + views: Apify instagram-reel-scraper.
+// Profile + reels: Apify only (profile-scraper + reel-scraper).
 
 async function syncInstagram(
   supabase: ReturnType<typeof createServerSupabase>,
   account:  TrackedAccountRow,
 ) {
-  const [info, reels] = await Promise.all([
-    getInstagramUserInfo(account.username),
-    fetchInstagramReelsApify(account.username),
-  ])
+  console.log("Apify token:", !!process.env.APIFY_API_TOKEN)
+
+  const profileResult = await fetchInstagramProfileApify(account.username)
+  console.log("Instagram profile result:", JSON.stringify(profileResult))
+
+  if (!profileResult) {
+    throw new Error(`Instagram profile not found for @${account.username}`)
+  }
+
+  const reels = await fetchInstagramReelsApify(account.username)
+  console.log("Instagram reels count:", reels?.length)
 
   const totalViews = reels.reduce((s, r) => s + r.views, 0)
   const avgViews   = reels.length ? Math.round(totalViews / reels.length) : 0
@@ -198,9 +205,9 @@ async function syncInstagram(
   await supabase
     .from("tracked_accounts")
     .update({
-      display_name:    info.full_name || info.username,
-      avatar_url:      info.avatar_url,
-      follower_count:  info.follower_count,
+      display_name:    profileResult.display_name || profileResult.username,
+      avatar_url:      profileResult.avatar_url,
+      follower_count:  profileResult.follower_count,
       total_views:     totalViews,
       avg_views:       avgViews,
       engagement_rate: engRate,
