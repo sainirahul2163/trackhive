@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
-  ArrowLeft, RefreshCw, ExternalLink, TrendingUp,
+  ArrowLeft, RefreshCw, ExternalLink,
   Eye, BarChart3, Video, ArrowUpRight,
   AlertCircle, DollarSign, Heart, MessageCircle, Share2,
   Bookmark, Plus, Users, Zap, ChevronDown,
+  PlayCircle, BarChart2, Activity, Info,
 } from "lucide-react"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -19,8 +20,28 @@ import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/li
 import { VideoDetailDrawer } from "@/components/analytics/video-detail-drawer"
 import { fetchTrackedAccount, fetchTrackedVideos, fetchDailyStats, type DailyViewsPoint } from "@/lib/analytics-data"
 import { fetchCampaigns } from "@/lib/campaigns-data"
+import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/use-user"
-import type { TrackedAccount, TrackedVideo, Campaign } from "@/types"
+import type { TrackedAccount, TrackedVideo, Campaign, Platform } from "@/types"
+
+const PLATFORM_CPM_RATES: Record<Platform, number> = {
+  tiktok: 0.03,
+  instagram: 0.02,
+  youtube: 2.5,
+  facebook: 0.02,
+}
+
+function formatStatNumber(n: number): string {
+  if (n < 1000) return String(n)
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}K`
+  return `${(n / 1_000_000).toFixed(1)}M`
+}
+
+function calcEstCpmValue(platform: Platform, totalViews: number): string {
+  const rate = PLATFORM_CPM_RATES[platform]
+  const value = (totalViews / 1000) * rate
+  return `$${value.toFixed(2)}`
+}
 
 function buildEngagementData(videos: TrackedVideo[]) {
   const totals = videos.reduce((acc, v) => ({
@@ -74,8 +95,8 @@ function DetailSkeleton() {
         <Skeleton className="w-14 h-14 rounded-full" />
         <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-3.5 w-28" /></div>
       </div>
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => (
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        {[...Array(6)].map((_, i) => (
           <div key={i} className="rounded-xl border border-white/[0.06] bg-[#111111] p-4">
             <Skeleton className="h-3 w-20 mb-3" /><Skeleton className="h-6 w-16 mb-2" /><Skeleton className="h-3 w-14" />
           </div>
@@ -168,15 +189,28 @@ function AddToCampaignModal({ onClose, creatorName, userId }: { onClose: () => v
 }
 
 /* ─── Stat card ──────────────────────────────────────── */
-function StatCard({ label, value, icon: Icon, color, bg }: {
+function StatCard({ label, value, icon: Icon, color, bg, tooltip }: {
   label: string; value: string; icon: React.ElementType
-  color: string; bg: string
+  color: string; bg: string; tooltip?: string
 }) {
   return (
     <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">{label}</span>
-        <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center`}>
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">{label}</span>
+          {tooltip && (
+            <span className="relative group flex-shrink-0">
+              <Info className="w-3 h-3 text-zinc-600 cursor-help" aria-label={tooltip} />
+              <span
+                role="tooltip"
+                className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-52 rounded-lg border border-white/10 bg-[#1a1a1a] px-2.5 py-2 text-[10px] leading-relaxed text-zinc-400 shadow-xl group-hover:block"
+              >
+                {tooltip}
+              </span>
+            </span>
+          )}
+        </div>
+        <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
           <Icon className={`w-3.5 h-3.5 ${color}`} />
         </div>
       </div>
@@ -209,9 +243,11 @@ export default function AccountDetailPage() {
   const id = params.id as string
   const { user } = useUser()
 
-  const [account,    setAccount]    = useState<TrackedAccount | null>(null)
-  const [videos,     setVideos]     = useState<TrackedVideo[]>([])
-  const [dailyStats, setDailyStats] = useState<DailyViewsPoint[]>([])
+  const [account,       setAccount]       = useState<TrackedAccount | null>(null)
+  const [videos,        setVideos]        = useState<TrackedVideo[]>([])
+  const [dailyStats,    setDailyStats]    = useState<DailyViewsPoint[]>([])
+  const [totalLikes,    setTotalLikes]    = useState(0)
+  const [totalComments, setTotalComments] = useState(0)
   const [loading,    setLoading]    = useState(true)
   const [syncing,    setSyncing]    = useState(false)
   const [error,      setError]      = useState<string | null>(null)
@@ -226,19 +262,25 @@ export default function AccountDetailPage() {
     setLoading(true)
     setError(null)
     try {
-      const [acct, vids, daily] = await Promise.all([
+      const [acct, vids, daily, statsRes] = await Promise.all([
         fetchTrackedAccount(id),
         fetchTrackedVideos(id),
         fetchDailyStats(id, 90),
+        supabase.from("tracked_videos").select("likes, comments").eq("account_id", id),
       ])
+      const statsData = statsRes.data ?? []
       setAccount(acct)
       setVideos(vids)
       setDailyStats(daily)
+      setTotalLikes(statsData.reduce((sum, v) => sum + (v.likes ?? 0), 0))
+      setTotalComments(statsData.reduce((sum, v) => sum + (v.comments ?? 0), 0))
     } catch {
       setError("Failed to load account")
       setAccount(null)
       setVideos([])
       setDailyStats([])
+      setTotalLikes(0)
+      setTotalComments(0)
     } finally {
       setLoading(false)
     }
@@ -304,14 +346,20 @@ export default function AccountDetailPage() {
   if (!account) return null
   const cfg = PLATFORM_CONFIG[account.platform]
 
-  const estCpm     = ((account.engagement_rate / 10) * 8 + 6).toFixed(2)
-  const estMonthly = (((account.avg_views ?? 0) * 4 * parseFloat(estCpm)) / 1000).toFixed(0)
-
   const statCards = [
-    { label: "Total Views",       value: formatNumber(account.total_views ?? 0),  icon: Eye,        color: "text-blue-400",    bg: "bg-blue-500/10"    },
-    { label: "Avg Views / Video", value: formatNumber(account.avg_views ?? 0),     icon: BarChart3,  color: "text-purple-400",  bg: "bg-purple-500/10"  },
-    { label: "Engagement Rate",   value: `${account.engagement_rate.toFixed(1)}%`, icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-    { label: "Est. CPM",          value: `$${estCpm}`,                             icon: DollarSign, color: "text-amber-400",   bg: "bg-amber-500/10"   },
+    { label: "Total Views",       value: formatStatNumber(account.total_views ?? 0),  icon: PlayCircle,    color: "text-blue-400",    bg: "bg-blue-500/10"    },
+    { label: "Avg Views / Video", value: formatStatNumber(account.avg_views ?? 0),    icon: BarChart2,     color: "text-purple-400",  bg: "bg-purple-500/10"  },
+    { label: "Engagement Rate",   value: `${account.engagement_rate.toFixed(1)}%`,    icon: Activity,      color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    { label: "Total Likes",       value: formatStatNumber(totalLikes),                icon: Heart,         color: "text-pink-400",    bg: "bg-pink-500/10"    },
+    { label: "Total Comments",    value: formatStatNumber(totalComments),             icon: MessageCircle, color: "text-blue-400",    bg: "bg-blue-500/10"    },
+    {
+      label: "Est. CPM",
+      value: calcEstCpmValue(account.platform, account.total_views ?? 0),
+      icon: DollarSign,
+      color: "text-amber-400",
+      bg: "bg-amber-500/10",
+      tooltip: "Estimated based on average platform CPM rates. Actual rates may vary.",
+    },
   ]
 
   const PIE_COLORS = ["#a855f7", "#3b82f6", "#10b981", "#f59e0b"]
@@ -346,7 +394,6 @@ export default function AccountDetailPage() {
               </span>
             </div>
             <p className="text-sm text-zinc-500">@{account.username} · {formatNumber(account.follower_count)} followers</p>
-            <p className="text-xs text-zinc-600 mt-0.5">Est. monthly revenue: <span className="text-emerald-400 font-semibold">${parseInt(estMonthly).toLocaleString()}</span></p>
             {account.last_synced_at && (
               <p className="text-xs text-zinc-600 mt-0.5">Last synced: <span className="text-zinc-500">{timeAgo(account.last_synced_at)}</span></p>
             )}
@@ -378,7 +425,7 @@ export default function AccountDetailPage() {
       </div>
 
       {/* ── Stat cards ─────────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {statCards.map(s => <StatCard key={s.label} {...s} />)}
       </div>
 
