@@ -131,7 +131,10 @@ export interface SmartChartResult {
   isEmpty: boolean
 }
 
-/** Merges real daily snapshots with posted_at view proxies for gap dates. */
+/**
+ * Builds views chart data: posted_at spreads history; daily_stats apply only
+ * after the first snapshot date to avoid first-sync spikes.
+ */
 export function buildSmartChartData(
   dailyStats: DailyViewsPoint[],
   videos: TrackedVideo[],
@@ -153,34 +156,46 @@ export function buildSmartChartData(
     return { points: [], label: "Daily Views", isEmpty: true }
   }
 
-  const viewsByDate = new Map<string, number>()
-  const datesWithDailyStats = new Set<string>()
-  const datesWithProxy = new Set<string>()
-
+  const dailyByDate = new Map<string, number>()
   for (const stat of statsInRange) {
-    datesWithDailyStats.add(stat.date)
-    viewsByDate.set(stat.date, (viewsByDate.get(stat.date) ?? 0) + stat.views)
+    dailyByDate.set(stat.date, (dailyByDate.get(stat.date) ?? 0) + stat.views)
   }
 
+  const postedAtByDate = new Map<string, number>()
   for (const video of videosInRange) {
     const dateKey = format(new Date(video.posted_at!), "yyyy-MM-dd")
-    if (datesWithDailyStats.has(dateKey)) continue
-    datesWithProxy.add(dateKey)
-    viewsByDate.set(dateKey, (viewsByDate.get(dateKey) ?? 0) + Number(video.views ?? 0))
+    postedAtByDate.set(dateKey, (postedAtByDate.get(dateKey) ?? 0) + Number(video.views ?? 0))
   }
 
+  const earliestStatsDate =
+    statsInRange.length > 0
+      ? statsInRange.map((s) => s.date).sort()[0]
+      : null
+
+  let usedDaily = false
+  let usedProxy = false
   const points: SmartChartPoint[] = []
   let current = startDate
   while (current <= endDate) {
     const dateKey = format(current, "yyyy-MM-dd")
-    points.push({ date: dateKey, views: viewsByDate.get(dateKey) ?? 0 })
+    const useDailyStats = earliestStatsDate !== null && dateKey > earliestStatsDate
+
+    if (useDailyStats) {
+      const views = dailyByDate.get(dateKey) ?? 0
+      if (dailyByDate.has(dateKey)) usedDaily = true
+      points.push({ date: dateKey, views })
+    } else {
+      const views = postedAtByDate.get(dateKey) ?? 0
+      if (postedAtByDate.has(dateKey)) usedProxy = true
+      points.push({ date: dateKey, views })
+    }
     current = addDays(current, 1)
   }
 
   let label: ViewsChartLabel = "Views by Post Date"
-  if (datesWithDailyStats.size > 0 && datesWithProxy.size > 0) {
+  if (usedDaily && usedProxy) {
     label = "Views History"
-  } else if (datesWithDailyStats.size > 0) {
+  } else if (usedDaily) {
     label = "Daily Views"
   }
 

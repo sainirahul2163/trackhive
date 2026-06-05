@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber, viralityLabel } from "@/lib/platform"
 import { VideoDetailDrawer } from "@/components/analytics/video-detail-drawer"
-import { format } from "date-fns"
+import { addDays, format, subDays } from "date-fns"
 import {
   fetchTrackedAccount,
   fetchTrackedVideos,
@@ -180,7 +180,7 @@ type ChartTab = "views" | "followers"
 interface PerformanceChartPoint {
   date:      string
   views:     number
-  followers: number
+  followers: number | null
 }
 
 /* ─── Tooltip ────────────────────────────────────────── */
@@ -451,20 +451,35 @@ export default function AccountDetailPage() {
     [smartViewsChart],
   )
 
-  const followerChartData = useMemo(
-    (): PerformanceChartPoint[] =>
-      filterStatsByDays(followerSnapshots, activeDays).map((d) => ({
-        date:      new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+  const followerChart = useMemo(() => {
+    const filtered = filterStatsByDays(followerSnapshots, activeDays)
+    const snapshotByDate = new Map(filtered.map((s) => [s.date, s.follower_count]))
+    const endDate = new Date()
+    const startDate = subDays(endDate, activeDays)
+    const points: PerformanceChartPoint[] = []
+
+    let current = startDate
+    while (current <= endDate) {
+      const dateKey = format(current, "yyyy-MM-dd")
+      points.push({
+        date:      format(new Date(`${dateKey}T12:00:00`), "MMM d"),
         views:     0,
-        followers: d.follower_count,
-      })),
-    [followerSnapshots, activeDays],
-  )
+        followers: snapshotByDate.has(dateKey) ? snapshotByDate.get(dateKey)! : null,
+      })
+      current = addDays(current, 1)
+    }
+
+    return { points, snapshotCount: filtered.length }
+  }, [followerSnapshots, activeDays])
+
+  const followerChartData = followerChart.points
 
   const displayData: PerformanceChartPoint[] =
     chartTab === "views" ? viewsChartData : followerChartData
   const chartIsEmpty =
-    chartTab === "views" ? smartViewsChart.isEmpty : followerChartData.length === 0
+    chartTab === "views" ? smartViewsChart.isEmpty : followerChart.snapshotCount === 0
+  const showFollowerSparseNote = chartTab === "followers" && followerChart.snapshotCount > 0
+  const showFollowerDots = chartTab === "followers" && followerChart.snapshotCount <= 3
   const isInstagram = account?.platform === "instagram"
   const engagementData = useMemo(
     () => buildEngagementData(videos, !isInstagram),
@@ -629,6 +644,7 @@ export default function AccountDetailPage() {
               </p>
             </div>
           ) : (
+          <>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={displayData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
               <defs>
@@ -643,11 +659,17 @@ export default function AccountDetailPage() {
                 tickFormatter={(v: number) => chartTab === "views" ? formatChartViews(v) : formatNumber(v)} />
               <Tooltip content={<ChartTooltip />} />
               <Area type="monotone" dataKey={chartTab === "views" ? "views" : "followers"}
-                stroke="#7C3AED" strokeWidth={2} fill="url(#areaGrad)" dot={false}
+                stroke="#7C3AED" strokeWidth={2} fill="url(#areaGrad)"
+                connectNulls={false}
+                dot={showFollowerDots ? { r: 4, fill: "#7C3AED", stroke: "#0a0a0a", strokeWidth: 2 } : false}
                 activeDot={{ r: 4, fill: "#7C3AED", stroke: "#0a0a0a", strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>
+          {showFollowerSparseNote && (
+            <p className="text-xs text-zinc-600 text-center mt-2">Sync daily to build follower history</p>
+          )}
+          </>
           )}
         </div>
 
