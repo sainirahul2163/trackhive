@@ -72,6 +72,16 @@ export interface InstagramPost {
   created_at:      string
 }
 
+interface ApifyReelRaw {
+  shortCode:      string
+  caption?:       string
+  likesCount:     number
+  commentsCount:  number
+  videoPlayCount: number | null
+  timestamp:      string
+  url:            string
+}
+
 export interface YouTubeChannelInfo {
   channel_name:     string
   avatar:           string
@@ -293,6 +303,53 @@ function mapInstagramReels(reels: IGReelsRaw["reels"]): InstagramPost[] {
   })
 }
 
+export async function fetchInstagramReelsApify(username: string): Promise<InstagramPost[]> {
+  const token = process.env.APIFY_API_TOKEN
+  if (!token) throw new EnsembleDataError(500, 'APIFY_API_TOKEN is not configured')
+
+  const cacheKey = `apify:ig:reels:${username}`
+  const cached = fromCache<InstagramPost[]>(cacheKey)
+  if (cached) return cached
+
+  const res = await fetch(
+    `https://api.apify.com/v2/actors/apify~instagram-reel-scraper/run-sync-get-dataset-items?token=${token}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: [username], maxReelsPerProfile: 20 }),
+      next: { revalidate: 0 },
+    }
+  )
+
+  if (!res.ok) return []
+
+  const raw: ApifyReelRaw[] = await res.json()
+
+  const posts: InstagramPost[] = raw
+    .filter(r => r.videoPlayCount !== null && r.videoPlayCount > 0)
+    .map(r => {
+      const views    = r.videoPlayCount ?? 0
+      const likes    = r.likesCount    ?? 0
+      const comments = r.commentsCount ?? 0
+      return {
+        id:              r.shortCode,
+        shortcode:       r.shortCode,
+        caption:         r.caption ?? '',
+        thumbnail:       '',
+        views,
+        play_count:      views,
+        views_available: true as const,
+        likes,
+        comments,
+        engagement_rate: reelEngagementRate(views, likes, comments),
+        created_at:      r.timestamp ?? new Date().toISOString(),
+      }
+    })
+
+  toCache(cacheKey, posts)
+  return posts
+}
+
 function accountEngagementFromReels(reels: InstagramPost[]): number {
   if (!reels.length) return 0
   const totalViews = reels.reduce((s, r) => s + r.views, 0)
@@ -324,8 +381,8 @@ export async function getInstagramUserInfo(username: string): Promise<InstagramU
 
   let engagementRate = 0
   try {
-    const reelsRaw = await ed<IGReelsRaw>("/instagram/user/reels", { user_id: userId, depth: 1 })
-    engagementRate = accountEngagementFromReels(mapInstagramReels(reelsRaw?.reels ?? []))
+    const reels = await fetchInstagramReelsApify(username)
+    engagementRate = accountEngagementFromReels(reels)
   } catch {
     // Non-fatal — engagement rate stays 0 if reels can't be fetched
   }
@@ -358,10 +415,7 @@ export async function getInstagramUserPosts(
   const cached = fromCache<InstagramPost[]>(cacheKey)
   if (cached) return cached
 
-  const userId = await resolveInstagramUserId(username)
-  const raw = await ed<IGReelsRaw>("/instagram/user/reels", { user_id: userId, depth })
-
-  const posts = mapInstagramReels(raw?.reels ?? [])
+  const posts = await fetchInstagramReelsApify(username)
 
   toCache(cacheKey, posts)
   return posts
