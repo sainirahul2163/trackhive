@@ -29,10 +29,13 @@ export interface TikTokUserInfo {
 }
 
 export interface TikTokVideo {
-  id:          string
-  description: string
-  thumbnail:   string
-  views:       number
+  id:               string
+  description:      string
+  thumbnail:        string
+  views:            number
+  duration_seconds?: number | null
+  audio_name?:      string | null
+  saves?:           number | null
   likes:       number
   comments:    number
   shares:      number
@@ -77,14 +80,20 @@ export interface InstagramPost {
   shareCount?:      number
   likesCount?:      number
   videoPlayCount?:  number | null
+  duration_seconds?: number | null
+  audio_name?:      string | null
+  saves?:           number | null
 }
 
 interface ApifyReelRaw {
   shortCode:      string
+  id?:            string
   caption?:       string
   likesCount:     number
   commentsCount:  number
   videoPlayCount: number | null
+  videoDuration?: number | null
+  duration?:      number | null
   timestamp:      string
   url:            string
   displayUrl?:    string
@@ -96,6 +105,8 @@ interface ApifyReelRaw {
   videoShareCount?: number
   shareCount?:      number
   shares?:          number
+  musicInfo?:       { title?: string }
+  audio?:           { title?: string }
 }
 
 interface ApifyProfileRaw {
@@ -114,7 +125,7 @@ export interface InstagramProfileApify {
   follower_count:  number
   following_count: number
   post_count:      number
-  views_available: false
+  views_available: true
   engagement_rate: number
 }
 
@@ -150,13 +161,23 @@ interface TTPostRaw {
   aweme_id:    string
   desc:        string
   create_time: number
+  duration?:   number
   video?: {
+    duration?:      number
     cover?:         TTCoverField
     origin_cover?:  TTCoverField
     originCover?:   TTCoverField
     dynamic_cover?: TTCoverField
     dynamicCover?:  TTCoverField
   }
+  music?: {
+    title?: string
+  }
+  musicInfo?: {
+    title?: string
+  }
+  collectCount?:  number
+  collect_count?:  number
   statistics?: {
     play_count?:    number
     digg_count?:    number
@@ -230,7 +251,6 @@ function extractInstagramThumbnail(reel: ApifyReelRaw): string {
     reel.imageUrl?.trim() ||
     null
 
-  console.log("[Instagram thumbnail]", url)
   return url ?? ""
 }
 
@@ -325,15 +345,21 @@ export async function getTikTokUserVideos(username: string, depth = 1): Promise<
 
   const posts: TikTokVideo[] = (raw ?? []).map((p) => {
     const stats = p.statistics ?? p.stats
+    const duration = p.duration ?? p.video?.duration ?? null
+    const audioName = p.music?.title ?? p.musicInfo?.title ?? null
+    const saves = p.collectCount ?? p.collect_count ?? 0
     return {
-      id:          p.aweme_id,
-      description: p.desc ?? "",
-      thumbnail:   extractTikTokThumbnail(p.video),
-      views:       stats?.play_count    ?? 0,
-      likes:       stats?.digg_count    ?? 0,
-      comments:    stats?.comment_count ?? 0,
-      shares:      extractTikTokShares(p),
-      created_at:  new Date((p.create_time ?? 0) * 1000).toISOString(),
+      id:               p.aweme_id,
+      description:      p.desc ?? "",
+      thumbnail:        extractTikTokThumbnail(p.video),
+      views:            stats?.play_count    ?? 0,
+      likes:            stats?.digg_count    ?? 0,
+      comments:         stats?.comment_count ?? 0,
+      shares:           extractTikTokShares(p),
+      created_at:       new Date((p.create_time ?? 0) * 1000).toISOString(),
+      duration_seconds: duration,
+      audio_name:       audioName,
+      saves,
     }
   })
 
@@ -386,7 +412,7 @@ export async function fetchInstagramProfileApify(
     follower_count:  profile.followersCount ?? 0,
     following_count: profile.followsCount ?? 0,
     post_count:      profile.postsCount ?? 0,
-    views_available: false,
+    views_available: true,
     engagement_rate: 0,
   }
 
@@ -416,9 +442,8 @@ export async function fetchInstagramReelsApify(username: string): Promise<Instag
   const raw: ApifyReelRaw[] = await res.json()
 
   const posts: InstagramPost[] = raw
-    .filter(r => r.videoPlayCount !== null && r.videoPlayCount > 0)
+    .filter(r => String(r.shortCode ?? r.id ?? "").trim().length > 0)
     .map(r => {
-      console.log("[Instagram reel raw]", JSON.stringify(r).substring(0, 800))
       const views    = r.videoPlayCount ?? 0
       const likes    = r.likesCount    ?? 0
       const comments = r.commentsCount ?? 0
@@ -441,6 +466,9 @@ export async function fetchInstagramReelsApify(username: string): Promise<Instag
         shareCount:      r.shareCount,
         likesCount:      r.likesCount,
         videoPlayCount:  r.videoPlayCount,
+        duration_seconds: r.videoDuration ?? r.duration ?? null,
+        audio_name:       r.musicInfo?.title ?? r.audio?.title ?? "Original Audio",
+        saves:            null,
       }
     })
 

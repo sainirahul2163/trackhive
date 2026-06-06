@@ -83,27 +83,15 @@ function VideoThumbnail({
     return <VideoThumbnailPlaceholder platform={platform} size={size} />
   }
 
-  if (platform === "instagram") {
-    return (
-      <div className={`${dim} relative rounded-lg overflow-hidden flex-shrink-0 border border-white/[0.06]`}>
-        <Image
-          src={thumbnailUrl}
-          alt="video thumbnail"
-          fill
-          sizes={size === "spotlight" ? "100px" : "72px"}
-          className="object-cover"
-          onError={() => setImgFailed(true)}
-        />
-      </div>
-    )
-  }
-
   return (
-    <div className={`${dim} rounded-lg overflow-hidden flex-shrink-0 border border-white/[0.06]`}>
-      <img
+    <div className={`${dim} relative rounded-lg overflow-hidden flex-shrink-0 border border-white/[0.06]`}>
+      <Image
         src={thumbnailUrl}
         alt="video thumbnail"
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        fill
+        sizes={size === "spotlight" ? "100px" : "72px"}
+        className="object-cover"
+        unoptimized
         onError={() => setImgFailed(true)}
       />
     </div>
@@ -380,12 +368,6 @@ export default function AccountDetailPage() {
         fetchFollowerSnapshots(id, 90).catch(() => [] as FollowerSnapshotPoint[]),
       ])
 
-      console.log("[account detail] accountId:", id)
-      console.log("[account detail] account total_views:", acct.total_views, "avg_views:", acct.avg_views)
-      console.log("[account detail] video aggregates:", JSON.stringify(aggregates))
-      console.log("[account detail] videos loaded:", vids.length)
-
-      // Fallback per field: sum from loaded videos if aggregate query returned 0
       const sumFromVideos = vids.reduce<AccountVideoAggregates>(
         (acc, v) => ({
           total_views:    acc.total_views    + Number(v.views    ?? 0),
@@ -395,13 +377,10 @@ export default function AccountDetailPage() {
         { total_views: 0, total_likes: 0, total_comments: 0 },
       )
       const resolvedAggregates: AccountVideoAggregates = {
-        total_views:    aggregates.total_views    || sumFromVideos.total_views,
-        total_likes:    aggregates.total_likes    || sumFromVideos.total_likes,
-        total_comments: aggregates.total_comments || sumFromVideos.total_comments,
+        total_views:    aggregates.total_views    != null ? aggregates.total_views    : sumFromVideos.total_views,
+        total_likes:    aggregates.total_likes    != null ? aggregates.total_likes    : sumFromVideos.total_likes,
+        total_comments: aggregates.total_comments != null ? aggregates.total_comments : sumFromVideos.total_comments,
       }
-
-      console.log("[account detail] resolved sums — views:", resolvedAggregates.total_views,
-        "likes:", resolvedAggregates.total_likes, "comments:", resolvedAggregates.total_comments)
 
       setAccount(acct)
       setVideos(vids)

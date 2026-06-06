@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowLeft, ExternalLink, Calendar, Disc3 } from "lucide-react"
 import {
   ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -53,8 +54,14 @@ export default function VideoFullPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-4 flex items-center justify-center min-h-[400px]">
           {video.thumbnail_url ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={video.thumbnail_url} alt="" className="max-h-[500px] rounded-lg object-contain" />
+            <Image
+              src={video.thumbnail_url}
+              alt=""
+              width={500}
+              height={500}
+              className="max-h-[500px] rounded-lg object-contain w-auto h-auto"
+              unoptimized
+            />
           ) : (
             <a href={video.video_url} target="_blank" rel="noopener noreferrer" className="text-sm text-purple-400 flex items-center gap-2">
               <ExternalLink className="w-4 h-4" /> View post on {cfg.label}

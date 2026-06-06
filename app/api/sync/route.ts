@@ -46,6 +46,7 @@ interface TrackedVideoRow {
   posted_at:        string | null
   duration_seconds?: number
   audio_name?:      string | null
+  saves?:           number
 }
 
 export async function POST(req: Request) {
@@ -112,6 +113,7 @@ export async function POST(req: Request) {
     }
   }
 
+  console.log(`[sync] Synced ${result.synced} accounts, failed ${result.failed}, skipped ${result.skipped}`)
   return NextResponse.json({ ...result, platform_limitations: PLATFORM_LIMITATIONS })
 }
 
@@ -151,12 +153,7 @@ async function syncTikTok(
 
   for (const video of videos) {
     const videoId = String(video.id ?? "").trim()
-    if (!videoId) {
-      console.log("[sync] TikTok: skipping video with missing id")
-      continue
-    }
-
-    console.log("[TikTok raw video]", JSON.stringify(video).substring(0, 800))
+    if (!videoId) continue
 
     const views    = toNum(video.views)
     const likes    = toNum(video.likes)
@@ -165,18 +162,21 @@ async function syncTikTok(
     const engagementRate = computeVideoEngagementRate(views, likes, comments)
 
     const payload = buildTrackedVideoPayload({
-      account_id:      account.id,
-      platform:        "tiktok",
-      video_url:       `https://www.tiktok.com/@${account.username}/video/${videoId}`,
-      thumbnail_url:   resolveThumbnailUrl(video.thumbnail),
-      caption:         video.description,
+      account_id:       account.id,
+      platform:         "tiktok",
+      video_url:        `https://www.tiktok.com/@${account.username}/video/${videoId}`,
+      thumbnail_url:    resolveThumbnailUrl(video.thumbnail),
+      caption:          video.description,
       views,
       likes,
       comments,
       shares,
-      engagement_rate: engagementRate,
-      virality_score:  Math.min(10, (views / 100_000) * 10),
-      posted_at:       video.created_at,
+      engagement_rate:  engagementRate,
+      virality_score:   Math.min(10, (views / 100_000) * 10),
+      posted_at:        video.created_at,
+      duration_seconds: video.duration_seconds,
+      audio_name:       video.audio_name,
+      saves:            video.saves,
     })
 
     const upserted = await upsertTrackedVideo(supabase, payload)
@@ -196,14 +196,12 @@ async function syncInstagram(
   console.log("Apify token:", !!process.env.APIFY_API_TOKEN)
 
   const profileResult = await fetchInstagramProfileApify(account.username)
-  console.log("Instagram profile result:", JSON.stringify(profileResult))
 
   if (!profileResult) {
     throw new Error(`Instagram profile not found for @${account.username}`)
   }
 
   const reels = await fetchInstagramReelsApify(account.username)
-  console.log("Instagram reels count:", reels?.length)
 
   const totalViews = reels.reduce((s, r) => s + r.views, 0)
   const avgViews   = reels.length ? Math.round(totalViews / reels.length) : 0
@@ -228,21 +226,7 @@ async function syncInstagram(
 
   for (const reel of reels) {
     const shortcode = String(reel.shortcode ?? reel.id ?? "").trim()
-    if (!shortcode) {
-      console.log("[sync] Instagram: skipping reel with missing shortcode")
-      continue
-    }
-
-    console.log("[Instagram raw reel]", JSON.stringify(reel).substring(0, 800))
-    console.log("[Instagram reel ALL keys]", Object.keys(reel))
-    console.log("[Instagram reel shares fields]", {
-      sharesCount:     reel.sharesCount,
-      videoShareCount: reel.videoShareCount,
-      shareCount:      reel.shareCount,
-      shares:          reel.shares,
-      videoPlayCount:  reel.videoPlayCount,
-      likesCount:      reel.likesCount,
-    })
+    if (!shortcode) continue
 
     const views    = toNum(reel.views)
     const likes    = toNum(reel.likes)
@@ -251,18 +235,21 @@ async function syncInstagram(
     const engagementRate = computeVideoEngagementRate(views, likes, comments)
 
     const payload = buildTrackedVideoPayload({
-      account_id:      account.id,
-      platform:        "instagram",
-      video_url:       `https://www.instagram.com/reel/${shortcode}/`,
-      thumbnail_url:   resolveThumbnailUrl(reel.thumbnail),
-      caption:         reel.caption,
+      account_id:       account.id,
+      platform:         "instagram",
+      video_url:        `https://www.instagram.com/reel/${shortcode}/`,
+      thumbnail_url:    resolveThumbnailUrl(reel.thumbnail),
+      caption:          reel.caption,
       views,
       likes,
       comments,
       shares,
-      engagement_rate: engagementRate,
-      virality_score:  Math.min(10, (views / 50_000) * 10),
-      posted_at:       reel.created_at,
+      engagement_rate:  engagementRate,
+      virality_score:   Math.min(10, (views / 50_000) * 10),
+      posted_at:        reel.created_at,
+      duration_seconds: reel.duration_seconds,
+      audio_name:       reel.audio_name,
+      saves:            reel.saves,
     })
 
     const upserted = await upsertTrackedVideo(supabase, payload)
@@ -373,6 +360,7 @@ function buildTrackedVideoPayload(input: {
   posted_at?:       string | null
   duration_seconds?: unknown
   audio_name?:      string | null
+  saves?:           unknown
 }): TrackedVideoRow {
   const row: TrackedVideoRow = {
     account_id:      input.account_id,
@@ -395,6 +383,9 @@ function buildTrackedVideoPayload(input: {
   if (input.audio_name?.trim()) {
     row.audio_name = input.audio_name.trim()
   }
+  if (input.saves != null) {
+    row.saves = toNum(input.saves)
+  }
 
   return row
 }
@@ -404,11 +395,8 @@ async function upsertTrackedVideo(
   videoPayload: TrackedVideoRow,
 ): Promise<{ id: string } | null> {
   if (!videoPayload.video_url) {
-    console.log("Inserting video: skipped — video_url is empty")
     return null
   }
-
-  console.log("Inserting video:", JSON.stringify(videoPayload))
 
   const { data, error } = await supabase
     .from("tracked_videos")
@@ -419,7 +407,7 @@ async function upsertTrackedVideo(
     .maybeSingle()
 
   if (error) {
-    console.log("Insert error:", JSON.stringify(error))
+    console.error("[sync] tracked_videos upsert error:", error.message)
     throw new Error(error.message)
   }
 
@@ -433,7 +421,7 @@ async function upsertTrackedVideo(
     .maybeSingle()
 
   if (findErr) {
-    console.log("Insert error:", JSON.stringify(findErr))
+    console.error("[sync] tracked_videos lookup error:", findErr.message)
     throw new Error(findErr.message)
   }
 
@@ -476,7 +464,7 @@ async function insertDailySnapshot(
     )
 
   if (error) {
-    console.log("[sync] video_daily_stats upsert error:", JSON.stringify(error))
+    console.error("[sync] video_daily_stats upsert error:", error.message)
   }
 }
 
@@ -498,6 +486,6 @@ async function insertFollowerSnapshot(
     )
 
   if (error) {
-    console.log("[sync] follower_snapshots upsert error:", JSON.stringify(error))
+    console.error("[sync] follower_snapshots upsert error:", error.message)
   }
 }

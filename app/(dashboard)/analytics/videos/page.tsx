@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import {
   Play, Clock, Heart, MessageCircle, Share2, MoreHorizontal,
   ExternalLink, Trash2, Eye, Radio,
@@ -202,7 +203,9 @@ export default function AnalyticsVideosPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3 max-w-xs">
                             <div className="w-10 h-10 rounded bg-white/[0.04] flex-shrink-0 overflow-hidden">
-                              {v.thumbnail_url && <img src={v.thumbnail_url} alt="" className="w-full h-full object-cover" />}
+                              {v.thumbnail_url && (
+                                <Image src={v.thumbnail_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
+                              )}
                             </div>
                             <div className="min-w-0">
                               <p className="text-xs text-zinc-300 truncate">{v.caption ?? "Untitled"}</p>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
+import Image from "next/image"
 import { Zap, Globe, Upload, Building2, Check, Eye, EyeOff } from "lucide-react"
 import { toast, Toaster } from "sonner"
 
@@ -88,7 +89,7 @@ function LivePreview({ state }: { state: WLState }) {
       <div style={{ height: "36px", backgroundColor: "#111111", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", padding: "0 12px", gap: "8px" }}>
         <div style={{ width: "20px", height: "20px", borderRadius: "5px", backgroundColor: state.primaryColor, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {state.logo_url
-            ? <img src={state.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "4px" }} />
+            ? <Image src={state.logo_url} alt="" width={20} height={20} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "4px" }} unoptimized />
             : <Zap style={{ width: "10px", height: "10px", color: "#fff", fill: "#fff" }} />
           }
         </div>
@@ -228,7 +229,7 @@ export function WhitelabelSettings() {
                 <label style={{ fontSize: "11px", fontWeight: 600, color: "#a1a1aa", display: "block", marginBottom: "8px" }}>Brand Logo</label>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <div style={{ width: "48px", height: "48px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                    {state.logo_url ? <img src={state.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Building2 style={{ width: "20px", height: "20px", color: "#52525b" }} />}
+                    {state.logo_url ? <Image src={state.logo_url} alt="" width={48} height={48} style={{ width: "100%", height: "100%", objectFit: "cover" }} unoptimized /> : <Building2 style={{ width: "20px", height: "20px", color: "#52525b" }} />}
                   </div>
                   <button onClick={handleComingSoon} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "7px", backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#a1a1aa", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>
                     <Upload style={{ width: "13px", height: "13px" }} /> Upload Logo

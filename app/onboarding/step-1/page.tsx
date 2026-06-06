@@ -1,6 +1,5 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { Zap, ArrowRight, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -36,7 +35,6 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 export default function OnboardingStep1() {
-  const router = useRouter()
   const [company, setCompany] = useState("")
   const [website, setWebsite] = useState("")
   const [teamSize, setTeamSize] = useState<TeamSize | "">("")
@@ -73,7 +71,7 @@ export default function OnboardingStep1() {
         goal,
       }))
 
-      router.push("/onboarding/step-2")
+      window.location.href = "/onboarding/step-2"
     } catch {
       setError("Failed to save your profile. Please try again.")
     } finally {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import {
   Video, Users, Play, Heart, MessageCircle, Activity,
   MoreHorizontal, ArrowRight, Flame,
@@ -10,7 +11,7 @@ import {
   ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts"
-import { subDays } from "date-fns"
+import { subDays, differenceInCalendarDays } from "date-fns"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, formatNumber } from "@/lib/platform"
@@ -58,6 +59,16 @@ export default function AnalyticsOverviewPage() {
     () => filtersFromState(selectedAccounts, platforms, contentType, dateFrom, dateTo),
     [selectedAccounts, platforms, contentType, dateFrom, dateTo],
   )
+
+  const kpiPeriodLabel = useMemo(() => {
+    const days = differenceInCalendarDays(dateTo, dateFrom) + 1
+    if (days === 30) return "Last 30 days"
+    if (days === 7) return "Last 7 days"
+    if (days === 90) return "Last 90 days"
+    const from = dateFrom.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    const to = dateTo.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    return `${from} – ${to}`
+  }, [dateFrom, dateTo])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -140,25 +151,29 @@ export default function AnalyticsOverviewPage() {
       {loading ? (
         <div className="grid grid-cols-3 gap-3">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {kpiCards.map((k) => {
-            const Icon = k.icon
-            return (
-              <div key={k.label} className="rounded-xl border border-white/[0.06] bg-[#111111] p-4 relative">
-                <Link href={k.href} className="absolute top-3 right-3 text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-0.5">
-                  All <ArrowRight className="w-3 h-3" />
-                </Link>
-                <div className="flex items-center gap-2 text-zinc-500 mb-2">
-                  <Icon className="w-4 h-4" />
-                  <span className="text-xs font-medium">{k.label}</span>
-                  <InfoTooltip text={`Total ${k.label.toLowerCase()} in selected period`} />
+        <>
+          <p className="text-[11px] text-zinc-500 -mt-2 mb-1">KPIs reflect selected date range ({kpiPeriodLabel})</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {kpiCards.map((k) => {
+              const Icon = k.icon
+              return (
+                <div key={k.label} className="rounded-xl border border-white/[0.06] bg-[#111111] p-4 relative">
+                  <Link href={k.href} className="absolute top-3 right-3 text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-0.5">
+                    All <ArrowRight className="w-3 h-3" />
+                  </Link>
+                  <div className="flex items-center gap-2 text-zinc-500 mb-1">
+                    <Icon className="w-4 h-4" />
+                    <span className="text-xs font-medium">{k.label}</span>
+                    <InfoTooltip text={`${k.label} in selected period (${kpiPeriodLabel})`} />
+                  </div>
+                  <p className="text-[10px] text-zinc-600 mb-2">({kpiPeriodLabel})</p>
+                  <p className="text-2xl font-bold text-white">{k.value}</p>
+                  <p className="text-xs text-emerald-400 mt-1">{k.delta} vs last period</p>
                 </div>
-                <p className="text-2xl font-bold text-white">{k.value}</p>
-                <p className="text-xs text-emerald-400 mt-1">{k.delta} vs last period</p>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-4">
@@ -216,7 +231,9 @@ export default function AnalyticsOverviewPage() {
             {topVideos.map((v) => (
               <div key={v.id} className="flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
                 <div className="w-10 h-10 rounded bg-white/[0.04] flex-shrink-0 overflow-hidden">
-                  {v.thumbnail_url && <img src={v.thumbnail_url} alt="" className="w-full h-full object-cover" />}
+                  {v.thumbnail_url && (
+                    <Image src={v.thumbnail_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-zinc-300 truncate">{v.caption}</p>
@@ -236,8 +253,11 @@ export default function AnalyticsOverviewPage() {
         <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-white">Top Accounts</span>
-              <InfoTooltip text="Accounts ranked by total views" />
+              <div>
+                <span className="text-sm font-semibold text-white">Top Accounts</span>
+                <p className="text-[10px] text-zinc-500 mt-0.5">Ranked by Total Views (All Time)</p>
+              </div>
+              <InfoTooltip text="Lifetime total views from tracked_accounts — not filtered by date range" />
             </div>
             <select value={topAccountCount} onChange={(e) => setTopAccountCount(Number(e.target.value))} className="text-xs bg-white/[0.04] border border-white/[0.08] rounded px-2 py-1 text-zinc-400 outline-none">
               {[5, 10, 20].map((n) => <option key={n} value={n}>{n}</option>)}
@@ -257,7 +277,10 @@ export default function AnalyticsOverviewPage() {
                     <span className="text-[10px] text-zinc-500">@{a.username}</span>
                   </div>
                 </div>
-                <span className="text-xs font-semibold text-white">{formatNumber(a.total_views ?? 0)}</span>
+                <div className="text-right">
+                  <span className="text-xs font-semibold text-white">{formatNumber(a.total_views ?? 0)}</span>
+                  <p className="text-[9px] text-zinc-600">All time</p>
+                </div>
               </Link>
             ))}
             {!topAccounts.length && <p className="text-xs text-zinc-600 py-4 text-center">No accounts yet</p>}

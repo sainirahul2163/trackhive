@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
+import Image from "next/image"
 import { Upload, Globe, Building2, Clock, X, Check } from "lucide-react"
 import { toast, Toaster } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -82,7 +83,7 @@ function LogoUploader({ value, onChange }: { value: string; onChange: (url: stri
       {/* Preview */}
       <div style={{ width: "64px", height: "64px", borderRadius: "10px", backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
         {value
-          ? <img src={value} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ? <Image src={value} alt="Logo" width={64} height={64} style={{ width: "100%", height: "100%", objectFit: "cover" }} unoptimized />
           : <Building2 style={{ width: "24px", height: "24px", color: "#52525b" }} />
         }
       </div>

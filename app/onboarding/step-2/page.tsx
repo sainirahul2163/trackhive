@@ -168,7 +168,7 @@ export default function OnboardingStep2() {
         })
       }
 
-      router.push("/onboarding/step-3")
+      window.location.href = "/onboarding/step-3"
     } catch {
       setError("Failed to save account. Please try again.")
     } finally {
@@ -267,7 +267,7 @@ export default function OnboardingStep2() {
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Start Tracking <ArrowRight className="w-4 h-4" /></>}
             </button>
             <button
-              onClick={() => router.push("/onboarding/step-3")}
+              onClick={() => { window.location.href = "/onboarding/step-3" }}
               disabled={saving}
               className="w-full py-2.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
             >

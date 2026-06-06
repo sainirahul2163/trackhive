@@ -102,11 +102,33 @@ export async function fetchUserAccountIds(userId?: string): Promise<string[]> {
   return (data ?? []).map((r) => r.id as string)
 }
 
+function matchesContentType(
+  video: Pick<TrackedVideo, "platform" | "duration_seconds">,
+  contentType: AnalyticsFilters["contentType"],
+): boolean {
+  if (contentType === "all") return true
+  if (contentType === "video") {
+    return (
+      (video.duration_seconds != null && video.duration_seconds > 0) ||
+      video.platform === "tiktok" ||
+      video.platform === "youtube"
+    )
+  }
+  if (contentType === "image") {
+    return (
+      video.platform === "instagram" &&
+      (video.duration_seconds == null || video.duration_seconds === 0)
+    )
+  }
+  return true
+}
+
 async function fetchVideosInRange(
   accountIds: string[],
   dateFrom: string,
   dateTo: string,
   platforms: Platform[],
+  contentType: AnalyticsFilters["contentType"] = "all",
 ): Promise<TrackedVideo[]> {
   if (!accountIds.length) return []
 
@@ -121,7 +143,8 @@ async function fetchVideosInRange(
 
   const { data, error } = await query
   if (error) throw new Error(error.message)
-  return (data ?? []) as TrackedVideo[]
+  const rows = (data ?? []) as TrackedVideo[]
+  return contentType === "all" ? rows : rows.filter((v) => matchesContentType(v, contentType))
 }
 
 function computeEngagement(views: number, likes: number, comments: number): number {
@@ -134,7 +157,7 @@ export async function fetchOverviewMetrics(
   accountIds: string[],
 ): Promise<OverviewMetrics> {
   const ids = filters.accountIds.length ? filters.accountIds : accountIds
-  const videos = await fetchVideosInRange(ids, filters.dateFrom, filters.dateTo, filters.platforms)
+  const videos = await fetchVideosInRange(ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType)
 
   const views = videos.reduce((s, v) => s + (v.views ?? 0), 0)
   const likes = videos.reduce((s, v) => s + v.likes, 0)
@@ -143,7 +166,7 @@ export async function fetchOverviewMetrics(
   const activeAccountSet = new Set(videos.map((v) => v.account_id))
 
   const prev = previousPeriod(filters.dateFrom, filters.dateTo)
-  const prevVideos = await fetchVideosInRange(ids, prev.dateFrom, prev.dateTo, filters.platforms)
+  const prevVideos = await fetchVideosInRange(ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType)
   const prevViews = prevVideos.reduce((s, v) => s + (v.views ?? 0), 0)
   const prevLikes = prevVideos.reduce((s, v) => s + v.likes, 0)
   const prevComments = prevVideos.reduce((s, v) => s + v.comments, 0)
@@ -174,9 +197,14 @@ export async function fetchChartData(
   const ids = filters.accountIds.length ? filters.accountIds : accountIds
   if (!ids.length) return []
 
+  const filteredVideos = await fetchVideosInRange(
+    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
+  )
+  const allowedVideoIds = new Set(filteredVideos.map((v) => v.id))
+
   const { data: stats, error } = await supabase
     .from("video_daily_stats")
-    .select("date, views, tracked_videos!inner(account_id, platform, posted_at)")
+    .select("date, views, video_id, tracked_videos!inner(account_id, platform, posted_at, duration_seconds)")
     .in("tracked_videos.account_id", ids)
     .gte("date", filters.dateFrom)
     .lte("date", filters.dateTo)
@@ -186,19 +214,25 @@ export async function fetchChartData(
   interface StatRow {
     date: string
     views: number
-    tracked_videos: { account_id: string; platform: Platform; posted_at: string | null }
+    video_id: string
+    tracked_videos: {
+      account_id: string
+      platform: Platform
+      posted_at: string | null
+      duration_seconds: number | null
+    }
   }
 
   const byDate = new Map<string, ChartPoint>()
   for (const row of (stats ?? []) as unknown as StatRow[]) {
+    if (filters.contentType !== "all" && !allowedVideoIds.has(row.video_id)) continue
     if (filters.platforms.length && !filters.platforms.includes(row.tracked_videos.platform)) continue
     const existing = byDate.get(row.date) ?? { date: row.date, views: 0, postedVideos: 0 }
     existing.views += row.views
     byDate.set(row.date, existing)
   }
 
-  const videos = await fetchVideosInRange(ids, filters.dateFrom, filters.dateTo, filters.platforms)
-  for (const v of videos) {
+  for (const v of filteredVideos) {
     if (!v.posted_at) continue
     const d = v.posted_at.slice(0, 10)
     const existing = byDate.get(d) ?? { date: d, views: 0, postedVideos: 0 }
@@ -220,7 +254,7 @@ export async function fetchTopVideos(
 
   let query = supabase
     .from("tracked_videos")
-    .select("id, caption, views, likes, comments, thumbnail_url, platform, posted_at, tracked_accounts(username, display_name, avatar_url)")
+    .select("id, caption, views, likes, comments, thumbnail_url, platform, posted_at, duration_seconds, tracked_accounts(username, display_name, avatar_url)")
     .in("account_id", ids)
     .gte("posted_at", `${filters.dateFrom}T00:00:00`)
     .lte("posted_at", `${filters.dateTo}T23:59:59`)
@@ -240,10 +274,18 @@ export async function fetchTopVideos(
     comments: number
     thumbnail_url: string | null
     platform: Platform
+    duration_seconds: number | null
     tracked_accounts: { username: string; display_name: string | null; avatar_url: string | null } | null
   }
 
-  return ((data ?? []) as unknown as Row[]).map((r) => ({
+  const rows = ((data ?? []) as unknown as Row[]).filter((r) =>
+    matchesContentType(
+      { platform: r.platform, duration_seconds: r.duration_seconds },
+      filters.contentType,
+    ),
+  )
+
+  return rows.map((r) => ({
     id: r.id,
     caption: r.caption ?? "Untitled",
     views: r.views ?? 0,

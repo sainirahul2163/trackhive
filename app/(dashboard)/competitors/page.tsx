@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect, useMemo } from "react"
+import Image from "next/image"
 import {
   Plus, Globe, Eye, Users, TrendingUp, BarChart2,
   Star, StarOff, ChevronRight, AlertCircle,
@@ -16,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
 import {
   fetchCompetitors, fetchCompetitorVideos, fetchCompetitorCreators, fetchAiReports,
+  fetchWeeklyComparison, type WeeklyComparisonPoint,
 } from "@/lib/competitors-data"
 import { AddCompetitorDrawer } from "@/components/competitors/add-competitor-drawer"
 import { useUser } from "@/lib/use-user"
@@ -64,7 +66,7 @@ export default function CompetitorsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>("Overview")
   const [showAddDrawer, setShowAddDrawer] = useState(false)
-  const weeklyData: { week: string; competitor: number; yours: number }[] = []
+  const [weeklyData, setWeeklyData] = useState<WeeklyComparisonPoint[]>([])
   const [expandedReport, setExpandedReport] = useState<string | null>(null)
   const [generatingReport, setGeneratingReport] = useState(false)
 
@@ -83,6 +85,16 @@ export default function CompetitorsPage() {
   }, [])
 
   useEffect(() => { loadCompetitors(user?.id) }, [loadCompetitors, user?.id])
+
+  useEffect(() => {
+    if (!selectedId) {
+      setWeeklyData([])
+      return
+    }
+    fetchWeeklyComparison(selectedId, user?.id)
+      .then(setWeeklyData)
+      .catch(() => setWeeklyData([]))
+  }, [selectedId, user?.id])
 
   useEffect(() => {
     if (!selectedId) return
@@ -337,7 +349,7 @@ export default function CompetitorsPage() {
                   <div className="xl:col-span-2 rounded-xl border border-white/[0.06] bg-[#111111] p-5">
                     <h3 className="text-[15px] font-semibold text-white mb-4">Weekly Views Trend</h3>
                     {weeklyData.length === 0 ? (
-                      <p className="text-sm text-zinc-500 text-center py-16">Weekly comparison data will appear after sync</p>
+                      <p className="text-sm text-zinc-500 text-center py-16">Add competitor accounts to see comparison</p>
                     ) : (
                     <ResponsiveContainer width="100%" height={200}>
                       <LineChart data={weeklyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
@@ -399,7 +411,9 @@ export default function CompetitorsPage() {
                         <div key={v.id} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
                           <span className="text-xs font-bold text-zinc-600 w-4">#{i + 1}</span>
                           <div className="w-14 h-8 rounded overflow-hidden flex-shrink-0 bg-white/[0.04]">
-                            {v.thumbnail_url && <img src={v.thumbnail_url} alt="" className="w-full h-full object-cover" />}
+                            {v.thumbnail_url && (
+                              <Image src={v.thumbnail_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-zinc-300 truncate">{v.caption}</p>
@@ -451,7 +465,9 @@ export default function CompetitorsPage() {
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div className="w-14 h-8 rounded overflow-hidden flex-shrink-0 bg-white/[0.04]">
-                                {v.thumbnail_url && <img src={v.thumbnail_url} alt="" className="w-full h-full object-cover" />}
+                                {v.thumbnail_url && (
+                              <Image src={v.thumbnail_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
+                            )}
                               </div>
                               <p className="text-sm text-zinc-300 line-clamp-1">{v.caption}</p>
                             </div>
@@ -571,6 +587,9 @@ export default function CompetitorsPage() {
                 {/* Overlaid chart */}
                 <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5">
                   <h3 className="text-[15px] font-semibold text-white mb-4">Monthly View Trends — Head to Head</h3>
+                  {weeklyData.length === 0 ? (
+                    <p className="text-sm text-zinc-500 text-center py-16">Add competitor accounts to see comparison</p>
+                  ) : (
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={weeklyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
@@ -581,6 +600,7 @@ export default function CompetitorsPage() {
                       <Line type="monotone" dataKey="yours" stroke="#10b981" strokeWidth={2.5} dot={false} strokeDasharray="5 3" name="Your workspace" />
                     </LineChart>
                   </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             )}
