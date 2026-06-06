@@ -3,6 +3,7 @@ import {
   getTikTokUserInfo,
   getInstagramUserInfo,
   getYouTubeChannelInfo,
+  resolveYouTubeChannelId,
   fetchInstagramReelsApify,
   EnsembleDataError,
 } from "@/lib/ensembledata"
@@ -58,10 +59,11 @@ export async function GET(req: Request) {
         top_reel_views: topReelViews,
       }
     } else if (platform === "youtube") {
-      const info = await getYouTubeChannelInfo(username)
+      const channelId = await resolveYouTubeChannelId(username)
+      const info = await getYouTubeChannelInfo(channelId)
       preview = {
         platform:       "youtube",
-        username,
+        username:       channelId,
         display_name:   info.channel_name,
         avatar_url:     info.avatar,
         follower_count: info.subscriber_count,

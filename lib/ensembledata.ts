@@ -526,9 +526,75 @@ export function platformHasViews(platform: string): boolean {
   return (PLATFORM_LIMITATIONS as Record<string, { views: boolean }>)[platform]?.views ?? false
 }
 
-// ─── 5. YouTube Channel Info ──────────────────────────────────────────────────
-// Uses YouTube Data API v3 (free, requires YOUTUBE_API_KEY env var).
+// ─── 5. YouTube — handle → channel ID + channel info ────────────────────────
 
+interface YTChannelIdResponse {
+  channel_id?: string
+  id?:         string
+}
+
+/** Resolve a @handle to a UC… channel ID via EnsembleData. */
+export async function getYouTubeChannelIdFromHandle(handle: string): Promise<string> {
+  const clean = handle.replace(/^@/, "").trim()
+  if (!clean) throw new EnsembleDataError(422, "YouTube handle is required")
+
+  const cacheKey = `yt:handle-id:${clean}`
+  const cached = fromCache<string>(cacheKey)
+  if (cached) return cached
+
+  const raw = await ed<YTChannelIdResponse | string>("/youtube/channel/get-id", { username: clean })
+  const channelId =
+    typeof raw === "string"
+      ? raw
+      : (raw.channel_id ?? raw.id ?? "")
+
+  if (!channelId) {
+    throw new EnsembleDataError(404, `YouTube channel not found for @${clean}`)
+  }
+
+  toCache(cacheKey, channelId)
+  return channelId
+}
+
+export function extractYouTubeIdentifier(input: string): { type: "channel_id" | "handle"; value: string } {
+  const trimmed = input.trim()
+
+  if (/^UC[\w-]{10,}$/.test(trimmed)) {
+    return { type: "channel_id", value: trimmed }
+  }
+
+  try {
+    const u = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`)
+    const parts = u.pathname.split("/").filter(Boolean)
+
+    if (parts[0] === "channel" && parts[1]) {
+      return { type: "channel_id", value: parts[1] }
+    }
+    if (parts[0]?.startsWith("@")) {
+      return { type: "handle", value: parts[0].slice(1) }
+    }
+    if ((parts[0] === "c" || parts[0] === "user") && parts[1]) {
+      return { type: "handle", value: parts[1] }
+    }
+    const channelParam = u.searchParams.get("channel")
+    if (channelParam) {
+      return { type: "channel_id", value: channelParam }
+    }
+  } catch {
+    // fall through — treat as plain handle
+  }
+
+  return { type: "handle", value: trimmed.replace(/^@/, "") }
+}
+
+/** Resolve a handle, @handle, URL, or UC… channel ID to a channel ID. */
+export async function resolveYouTubeChannelId(usernameOrUrl: string): Promise<string> {
+  const parsed = extractYouTubeIdentifier(usernameOrUrl)
+  if (parsed.type === "channel_id") return parsed.value
+  return getYouTubeChannelIdFromHandle(parsed.value)
+}
+
+// Uses YouTube Data API v3 (free, requires YOUTUBE_API_KEY env var).
 export async function getYouTubeChannelInfo(channelId: string): Promise<YouTubeChannelInfo> {
   const cacheKey = `yt:channel:${channelId}`
   const cached = fromCache<YouTubeChannelInfo>(cacheKey)

@@ -1,11 +1,17 @@
 import { supabase } from "@/lib/supabase"
 import type { TrendVideo, InspirationBoard, BoardVideo } from "@/types"
 
-export async function fetchTrendVideos(): Promise<TrendVideo[]> {
-  const { data, error } = await supabase
+export async function fetchTrendVideos(userId?: string): Promise<TrendVideo[]> {
+  let query = supabase
     .from("trend_videos")
     .select("*")
     .order("virality_score", { ascending: false })
+
+  if (userId) {
+    query = query.eq("workspace_id", userId)
+  }
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return data as TrendVideo[]
 }

@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Zap, ArrowRight } from "lucide-react"
+import { Zap, ArrowRight, Loader2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
 const TEAM_SIZES = ["Just me", "2–10", "11–50", "50+"] as const
 const GOALS = [
@@ -40,11 +41,44 @@ export default function OnboardingStep1() {
   const [website, setWebsite] = useState("")
   const [teamSize, setTeamSize] = useState<TeamSize | "">("")
   const [goal, setGoal] = useState<Goal | "">("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  function handleContinue() {
+  async function handleContinue() {
     if (!company.trim() || !teamSize || !goal) return
-    localStorage.setItem("onboarding", JSON.stringify({ company: company.trim(), website: website.trim(), teamSize, goal }))
-    router.push("/onboarding/step-2")
+    setSaving(true)
+    setError(null)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setError("You must be logged in to continue.")
+        return
+      }
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          company_name: company.trim(),
+          website:      website.trim() || null,
+        })
+        .eq("id", user.id)
+
+      if (profileError) throw profileError
+
+      localStorage.setItem("onboarding", JSON.stringify({
+        company: company.trim(),
+        website: website.trim(),
+        teamSize,
+        goal,
+      }))
+
+      router.push("/onboarding/step-2")
+    } catch {
+      setError("Failed to save your profile. Please try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const isValid = company.trim() && teamSize && goal
@@ -54,7 +88,6 @@ export default function OnboardingStep1() {
       <div style={{ position: "fixed", inset: 0, background: "radial-gradient(ellipse at top left, rgba(124,58,237,0.15) 0%, transparent 60%)", pointerEvents: "none" }} />
 
       <div style={{ width: "100%", maxWidth: "480px", position: "relative", zIndex: 10 }}>
-        {/* Logo */}
         <div className="flex items-center justify-center gap-2.5 mb-6">
           <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
             <Zap className="w-4 h-4 text-white" fill="white" />
@@ -71,7 +104,6 @@ export default function OnboardingStep1() {
           </div>
 
           <div className="space-y-5">
-            {/* Company */}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-400">Company Name *</label>
               <input
@@ -84,7 +116,6 @@ export default function OnboardingStep1() {
               />
             </div>
 
-            {/* Website */}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-400">Website URL <span className="text-zinc-600">(optional)</span></label>
               <input
@@ -97,7 +128,6 @@ export default function OnboardingStep1() {
               />
             </div>
 
-            {/* Team size */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-zinc-400">Team Size *</label>
               <div className="grid grid-cols-4 gap-2">
@@ -118,7 +148,6 @@ export default function OnboardingStep1() {
               </div>
             </div>
 
-            {/* Goal */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-zinc-400">Main goal? *</label>
               <div className="grid grid-cols-2 gap-2">
@@ -141,12 +170,16 @@ export default function OnboardingStep1() {
             </div>
           </div>
 
+          {error && (
+            <p className="mt-4 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
+          )}
+
           <button
             onClick={handleContinue}
-            disabled={!isValid}
+            disabled={!isValid || saving}
             className="mt-6 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-lg shadow-purple-500/20"
           >
-            Continue <ArrowRight className="w-4 h-4" />
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Continue <ArrowRight className="w-4 h-4" /></>}
           </button>
         </div>
 

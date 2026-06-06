@@ -5,6 +5,8 @@ import {
   getTikTokUserVideos,
   fetchInstagramProfileApify,
   fetchInstagramReelsApify,
+  getYouTubeChannelInfo,
+  resolveYouTubeChannelId,
   EnsembleDataError,
   PLATFORM_LIMITATIONS,
   type TikTokVideo,
@@ -66,6 +68,8 @@ export async function POST(req: Request) {
 
   if (accountId) {
     query = query.eq("id", accountId)
+  } else {
+    query = query.not("workspace_id", "is", null)
   }
 
   const { data: accounts, error: fetchErr } = await query
@@ -91,8 +95,9 @@ export async function POST(req: Request) {
         await syncTikTok(supabase, account)
       } else if (account.platform === "instagram") {
         await syncInstagram(supabase, account)
+      } else if (account.platform === "youtube") {
+        await syncYouTube(supabase, account)
       } else {
-        // youtube / facebook — skip (YouTube needs separate key)
         result.skipped++
         continue
       }
@@ -125,7 +130,7 @@ async function syncTikTok(
   const totalViews = videos.reduce((s, v) => s + v.views, 0)
   const avgViews   = videos.length ? Math.round(totalViews / videos.length) : 0
   const engRate    = computeEngagementRate(videos.map((v) => ({
-    views: v.views, likes: v.likes, comments: v.comments, shares: v.shares,
+    views: v.views, likes: v.likes, comments: v.comments,
   })))
 
   // Update tracked_accounts
@@ -157,9 +162,7 @@ async function syncTikTok(
     const likes    = toNum(video.likes)
     const comments = toNum(video.comments)
     const shares   = resolveTikTokShares(video)
-    const engagementRate = views
-      ? (((likes + comments + shares) / views) * 100)
-      : 0
+    const engagementRate = computeVideoEngagementRate(views, likes, comments)
 
     const payload = buildTrackedVideoPayload({
       account_id:      account.id,
@@ -205,7 +208,7 @@ async function syncInstagram(
   const totalViews = reels.reduce((s, r) => s + r.views, 0)
   const avgViews   = reels.length ? Math.round(totalViews / reels.length) : 0
   const engRate    = computeEngagementRate(reels.map((r) => ({
-    views: r.views, likes: r.likes, comments: r.comments, shares: r.shares,
+    views: r.views, likes: r.likes, comments: r.comments,
   })))
 
   await supabase
@@ -245,9 +248,7 @@ async function syncInstagram(
     const likes    = toNum(reel.likes)
     const comments = toNum(reel.comments)
     const shares   = resolveInstagramShares(reel)
-    const engagementRate = views
-      ? (((likes + comments + shares) / views) * 100)
-      : 0
+    const engagementRate = computeVideoEngagementRate(views, likes, comments)
 
     const payload = buildTrackedVideoPayload({
       account_id:      account.id,
@@ -274,6 +275,32 @@ async function syncInstagram(
       })
     }
   }
+}
+
+// ─── YouTube sync ─────────────────────────────────────────────────────────────
+
+async function syncYouTube(
+  supabase: ReturnType<typeof createServerSupabase>,
+  account:  TrackedAccountRow,
+) {
+  const channelId = await resolveYouTubeChannelId(account.username)
+  const info = await getYouTubeChannelInfo(channelId)
+
+  await supabase
+    .from("tracked_accounts")
+    .update({
+      username:        channelId,
+      display_name:    info.channel_name,
+      avatar_url:      info.avatar,
+      follower_count:  info.subscriber_count,
+      total_views:     info.total_views,
+      avg_views:       info.video_count ? Math.round(info.total_views / info.video_count) : 0,
+      engagement_rate: 0,
+      last_synced_at:  new Date().toISOString(),
+    })
+    .eq("id", account.id)
+
+  await insertFollowerSnapshot(supabase, account.id, info.subscriber_count)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -413,13 +440,18 @@ async function upsertTrackedVideo(
   return existing
 }
 
+function computeVideoEngagementRate(views: number, likes: number, comments: number): number {
+  if (!views) return 0
+  return Math.round(((likes + comments) / views) * 100 * 100) / 100
+}
+
 function computeEngagementRate(
-  items: { views: number; likes: number; comments: number; shares: number }[],
+  items: { views: number; likes: number; comments: number }[],
 ): number {
   if (!items.length) return 0
   const totalViews = items.reduce((s, v) => s + v.views, 0)
   if (!totalViews) return 0
-  const totalEngage = items.reduce((s, v) => s + v.likes + v.comments + v.shares, 0)
+  const totalEngage = items.reduce((s, v) => s + v.likes + v.comments, 0)
   return Math.round((totalEngage / totalViews) * 100 * 100) / 100
 }
 

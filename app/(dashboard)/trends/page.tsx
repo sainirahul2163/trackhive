@@ -223,12 +223,13 @@ export default function TrendsPage() {
   const [creatingBoard, setCreatingBoard] = useState(false)
 
   useEffect(() => {
+    if (!user) return
     setVideosLoading(true)
-    fetchTrendVideos()
+    fetchTrendVideos(user.id)
       .then(setVideos)
       .catch(() => setVideos([]))
       .finally(() => setVideosLoading(false))
-  }, [])
+  }, [user])
 
   useEffect(() => {
     if (!user) return

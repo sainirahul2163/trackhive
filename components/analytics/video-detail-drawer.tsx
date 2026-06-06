@@ -145,7 +145,7 @@ export function VideoDetailDrawer({ video, open, onOpenChange }: VideoDetailDraw
             <MetricCard icon={Play} label="Views" value={formatNumber(video.views)} tooltip="Total view count" />
             <MetricCard icon={Heart} label="Likes" value={formatNumber(video.likes)} tooltip="Total likes" />
             <MetricCard icon={MessageCircle} label="Comments" value={formatNumber(video.comments)} tooltip="Total comments" />
-            <MetricCard icon={TrendingUp} label="Engagement" value={`${video.engagement_rate.toFixed(2)}%`} tooltip="(likes + comments) / views" />
+            <MetricCard icon={TrendingUp} label="Engagement" value={`${video.engagement_rate.toFixed(2)}%`} tooltip="likes + comments / views × 100" />
             <MetricCard icon={Share2} label="Shares" value={video.platform === "instagram" ? "N/A" : formatNumber(video.shares)} tooltip="Total shares" />
             <MetricCard icon={Bookmark} label="Bookmarks" value={formatNumber(video.saves)} tooltip="Total bookmarks/saves" />
             <MetricCard icon={Flame} label="Virality" value={video.virality_score.toFixed(2)} tooltip="Virality score 0-10" />

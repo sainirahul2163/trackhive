@@ -5,6 +5,7 @@ import { useState } from "react"
 import { Zap, Check, Mail, MessageSquare, Hash, ArrowLeft } from "lucide-react"
 import { toast, Toaster } from "sonner"
 import confetti from "canvas-confetti"
+import { supabase } from "@/lib/supabase"
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -31,6 +32,7 @@ export default function OnboardingStep3() {
   const [discordWebhook, setDiscordWebhook] = useState("")
   const [finishing, setFinishing] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   function launchConfetti() {
     const end = Date.now() + 2200
@@ -63,13 +65,39 @@ export default function OnboardingStep3() {
     })
   }
 
-  function handleFinish() {
+  async function handleFinish() {
     setFinishing(true)
-    setTimeout(() => {
+    setError(null)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setError("You must be logged in to finish setup.")
+        return
+      }
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          alert_method:    alertMethod,
+          discord_webhook: alertMethod === "discord" && discordWebhook.trim()
+            ? discordWebhook.trim()
+            : null,
+        })
+        .eq("id", user.id)
+
+      if (profileError) throw profileError
+
       setDone(true)
       launchConfetti()
-      setTimeout(() => router.push("/dashboard"), 2400)
-    }, 800)
+      setTimeout(() => {
+        window.location.href = "/dashboard"
+      }, 2400)
+    } catch {
+      setError("Failed to save alert preferences. Please try again.")
+    } finally {
+      setFinishing(false)
+    }
   }
 
   return (
@@ -191,6 +219,10 @@ export default function OnboardingStep3() {
                     />
                   )}
                 </div>
+
+                {error && (
+                  <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
+                )}
 
                 <button
                   onClick={handleFinish}
