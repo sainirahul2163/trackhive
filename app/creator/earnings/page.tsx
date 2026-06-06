@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { toast, Toaster } from "sonner"
 import {
   X, DollarSign, Clock, CheckCircle2, AlertCircle,
   CreditCard, Wallet, Building2, ChevronDown, ArrowUpRight,
@@ -118,7 +119,10 @@ function PayMethodDrawer({ methods, onClose }: PayMethodDrawerProps) {
             )
           })}
 
-          <button style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "11px", borderRadius: "10px", border: "1px dashed rgba(255,255,255,0.1)", backgroundColor: "transparent", color: "#71717a", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+          <button
+            onClick={() => toast.info("Coming soon", { description: "Payment setup is launching soon." })}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "11px", borderRadius: "10px", border: "1px dashed rgba(255,255,255,0.1)", backgroundColor: "transparent", color: "#71717a", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+          >
             + Add payment method
           </button>
 
@@ -153,6 +157,8 @@ export default function CreatorEarningsPage() {
   const maxEarnings = MONTHLY.length > 0 ? Math.max(...MONTHLY.map(m => m.earnings)) : 0
 
   return (
+    <>
+    <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     <div style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
@@ -324,5 +330,6 @@ export default function CreatorEarningsPage() {
 
       {showPayMethod && <PayMethodDrawer methods={PAYMENT_METHODS} onClose={() => setShowPayMethod(false)} />}
     </div>
+    </>
   )
 }

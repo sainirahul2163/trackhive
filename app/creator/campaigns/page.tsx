@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import { toast, Toaster } from "sonner"
+import { acceptCampaignInvite, declineCampaignInvite } from "@/lib/creator-data"
 import {
   X, DollarSign, Calendar, CheckCircle2, Clock, AlertCircle,
   ChevronDown, FileText, Video, Link, Info, TrendingUp,
@@ -245,17 +247,27 @@ export default function CreatorCampaignsPage() {
   const [decliningInvite, setDecliningInvite] = useState<CampaignInvite | null>(null)
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set())
 
-  function acceptInvite(invite: CampaignInvite) {
+  async function acceptInvite(invite: CampaignInvite) {
     setAcceptedIds(prev => new Set([...Array.from(prev), invite.id]))
-    setTimeout(() => {
+    try {
+      await acceptCampaignInvite(invite.id)
       setInvites(prev => prev.filter(i => i.id !== invite.id))
+      toast.success("Invite accepted")
+    } catch {
+      toast.error("Failed to accept invite")
       setAcceptedIds(prev => { const s = new Set(Array.from(prev)); s.delete(invite.id); return s })
-    }, 1200)
+    }
   }
 
-  function declineInvite(invite: CampaignInvite) {
-    setInvites(prev => prev.filter(i => i.id !== invite.id))
-    setDecliningInvite(null)
+  async function declineInvite(invite: CampaignInvite, reason: string) {
+    try {
+      await declineCampaignInvite(invite.id)
+      setInvites(prev => prev.filter(i => i.id !== invite.id))
+      setDecliningInvite(null)
+      toast.success("Invite declined", { description: reason || "No reason provided." })
+    } catch {
+      toast.error("Failed to decline invite")
+    }
   }
 
   const filtered = useMemo(
@@ -276,6 +288,8 @@ export default function CreatorCampaignsPage() {
   ]
 
   return (
+    <>
+    <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     <div style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
@@ -466,10 +480,11 @@ export default function CreatorCampaignsPage() {
       {decliningInvite && (
         <DeclineModal
           invite={decliningInvite}
-          onConfirm={() => declineInvite(decliningInvite)}
+          onConfirm={reason => declineInvite(decliningInvite, reason)}
           onCancel={() => setDecliningInvite(null)}
         />
       )}
     </div>
+    </>
   )
 }

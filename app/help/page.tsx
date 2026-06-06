@@ -175,13 +175,13 @@ export default function HelpPage() {
                     <ul className="space-y-1.5">
                       {cat.articles.map(a => (
                         <li key={a}>
-                          <button
-                            onClick={() => {}}
+                          <Link
+                            href="/docs"
                             className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-left flex items-center gap-1"
                           >
                             <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
                             {a}
-                          </button>
+                          </Link>
                         </li>
                       ))}
                     </ul>

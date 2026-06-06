@@ -15,7 +15,15 @@ import { formatNumber } from "@/lib/platform"
 import { InviteCreatorDrawer } from "@/components/payments/invite-creator-drawer"
 import { ProcessPayoutModal } from "@/components/payments/process-payout-modal"
 import { CreateRuleDrawer } from "@/components/payments/create-rule-drawer"
-import { fetchCreators, fetchPayouts, fetchPayoutRules } from "@/lib/payments-data"
+import { toast, Toaster } from "sonner"
+import {
+  fetchCreators,
+  fetchPayouts,
+  fetchPayoutRules,
+  updatePayoutStatus,
+  approveAllPendingPayouts,
+  deletePayoutRule,
+} from "@/lib/payments-data"
 import { useUser } from "@/lib/use-user"
 import type {
   Creator, Payout, PayoutRule,
@@ -147,21 +155,72 @@ export default function PaymentsPage() {
     setShowProcessModal(true)
   }
 
-  function handleHold(id: string) {
-    setPayouts(prev => prev.map(p => p.id === id ? { ...p, status: "on_hold" } : p))
+  async function handleHold(id: string) {
+    try {
+      await updatePayoutStatus(id, "on_hold")
+      setPayouts(prev => prev.map(p => p.id === id ? { ...p, status: "on_hold" } : p))
+      toast.success("Payout placed on hold")
+    } catch {
+      toast.error("Failed to place payout on hold")
+    }
   }
 
-  function handleApproveAll() {
-    setPayouts(prev => prev.map(p =>
-      p.status === "pending" ? { ...p, status: "approved" } : p
-    ))
+  async function handleApproveAll() {
+    if (!user?.id) return
+    try {
+      await approveAllPendingPayouts(user.id)
+      setPayouts(prev => prev.map(p =>
+        p.status === "pending" ? { ...p, status: "approved" } : p
+      ))
+      toast.success("All pending payouts approved")
+    } catch {
+      toast.error("Failed to approve payouts")
+    }
   }
 
-  function handleDeleteRule(id: string) {
-    setRules(prev => prev.filter(r => r.id !== id))
+  async function handleDeleteRule(id: string) {
+    try {
+      await deletePayoutRule(id)
+      setRules(prev => prev.filter(r => r.id !== id))
+      toast.success("Rule deleted")
+    } catch {
+      toast.error("Failed to delete rule")
+    }
+  }
+
+  function handleExportCsv() {
+    const rows = filteredHistory.length > 0 ? filteredHistory : payouts
+    if (rows.length === 0) {
+      toast.info("No payment data to export")
+      return
+    }
+    const headers = ["Date", "Creator", "Email", "Campaign", "Amount", "Method", "Status", "Invoice"]
+    const csvRows = [
+      headers.join(","),
+      ...rows.map(p => [
+        formatDate(p.paid_at ?? p.created_at),
+        `"${(p.creator?.name ?? "").replace(/"/g, '""')}"`,
+        `"${(p.creator?.email ?? "").replace(/"/g, '""')}"`,
+        `"${(p.campaign?.name ?? "").replace(/"/g, '""')}"`,
+        p.amount.toString(),
+        p.payment_method,
+        p.status,
+        `"${(p.invoice_number ?? "").replace(/"/g, '""')}"`,
+      ].join(",")),
+    ]
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `trackhive-payments-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success("CSV exported")
   }
 
   return (
+    <>
+    <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     <div className="space-y-5 max-w-7xl">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -379,7 +438,10 @@ export default function PaymentsPage() {
                 className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#111111] border border-white/[0.06] text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-purple-500/40 transition-colors"
               />
             </div>
-            <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-all">
+            <button
+              onClick={handleExportCsv}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-all"
+            >
               <TrendingUp className="w-3.5 h-3.5" />
               Export CSV
             </button>
@@ -482,11 +544,19 @@ export default function PaymentsPage() {
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           {!c.invite_accepted && (
-                            <button className="p-1.5 rounded-md text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Resend Invite">
+                            <button
+                              onClick={() => toast.success("Invite resent", { description: "Email delivery is launching soon." })}
+                              className="p-1.5 rounded-md text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                              title="Resend Invite"
+                            >
                               <Send className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          <button className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors" title="More">
+                          <button
+                            onClick={() => toast.info("Coming soon", { description: "More creator actions are launching soon." })}
+                            className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
+                            title="More"
+                          >
                             <MoreHorizontal className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -578,5 +648,6 @@ export default function PaymentsPage() {
         onSave={(rule: PayoutRule) => setRules(prev => [rule, ...prev])}
       />
     </div>
+    </>
   )
 }

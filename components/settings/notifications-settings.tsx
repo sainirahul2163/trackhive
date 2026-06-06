@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Check, Mail, Bell, MessageSquare } from "lucide-react"
 import { toast, Toaster } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 type DeliveryChannel = "email" | "slack" | "inapp"
 
@@ -163,9 +164,25 @@ export function NotificationsSettings() {
 
   async function handleSave() {
     setSaving(true)
-    await new Promise(r => setTimeout(r, 700))
-    setSaving(false)
-    toast.success("Notification preferences saved")
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error("You must be logged in to save preferences")
+        return
+      }
+      const anySlack = groups.some(g => g.alerts.some(a => a.slack))
+      const alertMethod = anySlack ? "slack" : "email"
+      const { error } = await supabase
+        .from("profiles")
+        .update({ alert_method: alertMethod })
+        .eq("id", user.id)
+      if (error) throw error
+      toast.success("Notification preferences saved")
+    } catch {
+      toast.error("Failed to save notification preferences")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

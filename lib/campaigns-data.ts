@@ -58,3 +58,55 @@ export async function insertCampaignCreators(
   )
   if (error) throw new Error(error.message)
 }
+
+export interface CampaignUpdatePayload {
+  name?:          string
+  brand?:         string | null
+  start_date?:    string | null
+  end_date?:      string | null
+  target_views?:  number
+  target_videos?: number
+}
+
+export async function updateCampaign(id: string, payload: CampaignUpdatePayload): Promise<Campaign> {
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data as Campaign
+}
+
+export async function deleteCampaign(id: string): Promise<void> {
+  const { error } = await supabase.from("campaigns").delete().eq("id", id)
+  if (error) throw new Error(error.message)
+}
+
+export async function approveAllCampaignPayouts(campaignId: string): Promise<void> {
+  const { error } = await supabase
+    .from("campaign_creators")
+    .update({ payout_status: "approved" })
+    .eq("campaign_id", campaignId)
+    .in("payout_status", ["pending", "on_hold"])
+  if (error) throw new Error(error.message)
+
+  const { error: payoutsError } = await supabase
+    .from("payouts")
+    .update({ status: "approved" })
+    .eq("campaign_id", campaignId)
+    .eq("status", "pending")
+  if (payoutsError) throw new Error(payoutsError.message)
+}
+
+export async function updateCampaignCreatorPayoutStatus(
+  creatorRowId: string,
+  status: "pending" | "approved" | "on_hold" | "paid",
+): Promise<void> {
+  const { error } = await supabase
+    .from("campaign_creators")
+    .update({ payout_status: status })
+    .eq("id", creatorRowId)
+  if (error) throw new Error(error.message)
+}

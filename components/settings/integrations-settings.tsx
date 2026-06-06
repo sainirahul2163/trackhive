@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Copy, RefreshCw, ExternalLink, Check, Eye, EyeOff, AlertTriangle, X, Mail, Zap } from "lucide-react"
 import { toast, Toaster } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 /* ── Integration card types ──────────────────────────── */
 type ConnectStatus = "connected" | "disconnected" | "coming_soon"
@@ -80,7 +81,7 @@ function APIKeySection() {
 
   function handleRegenerate() {
     setShowConfirm(false)
-    toast.success("API key regenerated", { description: "Your old key has been invalidated." })
+    toast.info("Coming soon", { description: "API key management is launching soon." })
   }
 
   return (
@@ -129,11 +130,44 @@ function APIKeySection() {
 function DiscordSection() {
   const [webhook, setWebhook] = useState("")
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  function save() {
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      const { data } = await supabase
+        .from("profiles")
+        .select("discord_webhook")
+        .eq("id", user.id)
+        .single()
+      if (data?.discord_webhook) {
+        setWebhook(data.discord_webhook)
+        setSaved(true)
+      }
+    })
+  }, [])
+
+  async function save() {
     if (!webhook.startsWith("https://discord.com/api/webhooks/")) { toast.error("Enter a valid Discord webhook URL"); return }
-    setSaved(true)
-    toast.success("Discord webhook saved")
+    setSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error("You must be logged in to save")
+        return
+      }
+      const { error } = await supabase
+        .from("profiles")
+        .update({ discord_webhook: webhook.trim() })
+        .eq("id", user.id)
+      if (error) throw error
+      setSaved(true)
+      toast.success("Discord webhook saved")
+    } catch {
+      toast.error("Failed to save Discord webhook")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -146,8 +180,8 @@ function DiscordSection() {
         style={{ flex: 1, padding: "8px 12px", borderRadius: "7px", backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#e4e4e7", fontSize: "12px", outline: "none", boxSizing: "border-box" }}
         className="focus:border-purple-500/40"
       />
-      <button onClick={save} style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "7px", backgroundColor: saved ? "rgba(52,211,153,0.1)" : "rgba(255,255,255,0.05)", border: saved ? "1px solid rgba(52,211,153,0.25)" : "1px solid rgba(255,255,255,0.08)", color: saved ? "#34d399" : "#a1a1aa", fontSize: "12px", fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-        {saved ? <><Check style={{ width: "12px", height: "12px" }} /> Saved</> : "Save"}
+      <button onClick={save} disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "7px", backgroundColor: saved ? "rgba(52,211,153,0.1)" : "rgba(255,255,255,0.05)", border: saved ? "1px solid rgba(52,211,153,0.25)" : "1px solid rgba(255,255,255,0.08)", color: saved ? "#34d399" : "#a1a1aa", fontSize: "12px", fontWeight: 600, cursor: saving ? "wait" : "pointer", flexShrink: 0, opacity: saving ? 0.6 : 1 }}>
+        {saving ? "Saving…" : saved ? <><Check style={{ width: "12px", height: "12px" }} /> Saved</> : "Save"}
       </button>
     </div>
   )
@@ -261,8 +295,8 @@ export function IntegrationsSettings() {
       {/* Slack */}
       <IntegrationCard icon={<SlackIcon />} name="Slack" description="Get alerts in your Slack channel when creators go viral." status="disconnected">
         <p style={{ fontSize: "12px", color: "#71717a", marginBottom: "12px" }}>Click below to begin the OAuth flow and choose which Slack channel to post to.</p>
-        <button onClick={() => toast.info("Slack OAuth — coming soon!")} style={{ padding: "8px 16px", borderRadius: "7px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fafafa", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-          Authorize with Slack
+        <button onClick={() => toast.info("Coming soon", { description: "Slack integration is launching soon." })} style={{ padding: "8px 16px", borderRadius: "7px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fafafa", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+          Connect Slack
         </button>
       </IntegrationCard>
 

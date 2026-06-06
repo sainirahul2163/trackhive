@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { createBrowserClient } from "@supabase/ssr"
+import { toast, Toaster } from "sonner"
+import { updateCreatorProfile } from "@/lib/creator-data"
 import {
   User, Mail, MapPin, Link as LinkIcon,
   Check, Edit3, Plus, Trash2, Bell, Shield, Eye, EyeOff, Save,
@@ -141,15 +143,21 @@ export default function CreatorProfilePage() {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       const user = data?.user
       if (!user) return
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, bio, email")
+        .eq("id", user.id)
+        .single()
       const meta = user.user_metadata
-      const name = (meta?.full_name ?? meta?.name ?? "") as string
+      const name = profile?.full_name ?? (meta?.full_name ?? meta?.name ?? "") as string
       setForm(f => ({
         ...f,
         displayName: name || f.displayName,
-        email: user.email ?? f.email,
+        email: profile?.email ?? user.email ?? f.email,
+        bio: profile?.bio ?? f.bio,
       }))
     }).catch(() => {})
   }, [])
@@ -158,9 +166,40 @@ export default function CreatorProfilePage() {
     return (v: string) => setForm(f => ({ ...f, [key]: v }))
   }
 
-  function handleSave() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+  async function handleSave() {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error("You must be logged in to save")
+        return
+      }
+      await updateCreatorProfile(user.id, {
+        full_name: form.displayName.trim(),
+        bio: form.bio.trim() || null,
+      })
+      setSaved(true)
+      toast.success("Profile saved")
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      toast.error("Failed to save profile")
+    }
+  }
+
+  function handleComingSoon() {
+    toast.info("Coming soon", { description: "This feature is launching soon." })
+  }
+
+  async function handleSignOut() {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    await supabase.auth.signOut()
+    window.location.href = "/login"
   }
 
   const initials = form.displayName
@@ -175,6 +214,8 @@ export default function CreatorProfilePage() {
   ]
 
   return (
+    <>
+    <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     <div style={{ maxWidth: "800px", display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
@@ -197,7 +238,7 @@ export default function CreatorProfilePage() {
           <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "linear-gradient(135deg, #7C3AED, #a78bfa)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", fontWeight: 800, color: "white" }}>
             {initials}
           </div>
-          <button style={{ position: "absolute", bottom: 0, right: 0, width: "22px", height: "22px", borderRadius: "50%", backgroundColor: "#7C3AED", border: "2px solid #111111", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button onClick={handleComingSoon} style={{ position: "absolute", bottom: 0, right: 0, width: "22px", height: "22px", borderRadius: "50%", backgroundColor: "#7C3AED", border: "2px solid #111111", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <Edit3 style={{ width: "9px", height: "9px", color: "white" }} />
           </button>
         </div>
@@ -299,7 +340,7 @@ export default function CreatorProfilePage() {
             )
           })}
 
-          <button style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "13px", borderRadius: "12px", border: "1px dashed rgba(255,255,255,0.1)", backgroundColor: "transparent", color: "#71717a", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={handleComingSoon} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "13px", borderRadius: "12px", border: "1px dashed rgba(255,255,255,0.1)", backgroundColor: "transparent", color: "#71717a", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
             <Plus style={{ width: "14px", height: "14px" }} />
             Connect another account
           </button>
@@ -351,7 +392,7 @@ export default function CreatorProfilePage() {
                 <input type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="Min. 8 characters"
                   style={{ width: "100%", padding: "10px 12px", borderRadius: "9px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#0d0d0d", color: "#fafafa", fontSize: "13px", outline: "none", height: "40px", boxSizing: "border-box" }} />
               </div>
-              <button style={{ alignSelf: "flex-start", padding: "9px 18px", borderRadius: "9px", backgroundColor: "#7C3AED", color: "white", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer" }}>
+              <button onClick={handleComingSoon} style={{ alignSelf: "flex-start", padding: "9px 18px", borderRadius: "9px", backgroundColor: "#7C3AED", color: "white", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer" }}>
                 Update Password
               </button>
             </div>
@@ -360,12 +401,13 @@ export default function CreatorProfilePage() {
           <div style={{ borderRadius: "14px", border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "#111111", padding: "22px" }}>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "#fafafa", marginBottom: "6px" }}>Active Sessions</p>
             <p style={{ fontSize: "12px", color: "#71717a", marginBottom: "14px" }}>You are currently signed in on 1 device.</p>
-            <button style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid rgba(248,113,113,0.2)", backgroundColor: "rgba(248,113,113,0.05)", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
-              Sign out all other sessions
+            <button onClick={handleSignOut} style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid rgba(248,113,113,0.2)", backgroundColor: "rgba(248,113,113,0.05)", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+              Sign out
             </button>
           </div>
         </div>
       )}
     </div>
+    </>
   )
 }

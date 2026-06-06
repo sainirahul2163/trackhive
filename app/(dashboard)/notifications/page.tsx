@@ -4,8 +4,9 @@ import { useState, useMemo } from "react"
 import {
   Bell, Check, CheckCheck, Trash2, Filter,
   TrendingUp, DollarSign, Users, Zap,
-  Eye, Megaphone, Star,
+  Eye, Megaphone, Star, Info,
 } from "lucide-react"
+import { toast, Toaster } from "sonner"
 
 /* ─── Types ─────────────────────────────────────────── */
 type NType = "campaign" | "payment" | "creator" | "competitor" | "system"
@@ -161,6 +162,8 @@ export default function NotificationsPage() {
   ].filter(g => g.items.length > 0)
 
   return (
+    <>
+    <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     <div className="max-w-3xl space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -195,6 +198,19 @@ export default function NotificationsPage() {
               Clear all
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 px-4 py-3 flex items-start gap-3">
+        <Info className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm text-zinc-300">Notifications are stored locally for now.</p>
+          <button
+            onClick={() => toast.info("Coming soon", { description: "Real-time notifications are launching soon." })}
+            className="text-xs text-purple-400 hover:text-purple-300 mt-1 transition-colors"
+          >
+            Learn more →
+          </button>
         </div>
       </div>
 
@@ -304,5 +320,6 @@ export default function NotificationsPage() {
         </div>
       </div>
     </div>
+    </>
   )
 }

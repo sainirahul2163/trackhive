@@ -13,7 +13,15 @@ import {
 } from "recharts"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PlatformIcon, PLATFORM_CONFIG, formatNumber } from "@/lib/platform"
-import { fetchCampaign, fetchCampaignCreators } from "@/lib/campaigns-data"
+import { toast, Toaster } from "sonner"
+import {
+  fetchCampaign,
+  fetchCampaignCreators,
+  updateCampaign,
+  deleteCampaign,
+  approveAllCampaignPayouts,
+  updateCampaignCreatorPayoutStatus,
+} from "@/lib/campaigns-data"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Campaign, CampaignCreator, CampaignStatus, CreatorStatus, PayoutStatus } from "@/types"
 
@@ -76,6 +84,17 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>("Overview")
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [approvingAll, setApprovingAll] = useState(false)
+  const [settingsForm, setSettingsForm] = useState({
+    name: "",
+    brand: "",
+    start_date: "",
+    end_date: "",
+    target_views: "",
+    target_videos: "",
+  })
   const chartData: { date: string; views: number }[] = []
 
   const load = useCallback(async () => {
@@ -88,6 +107,14 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
       ])
       setCampaign(camp)
       setCreators(crts)
+      setSettingsForm({
+        name: camp.name,
+        brand: camp.brand ?? "",
+        start_date: camp.start_date ?? "",
+        end_date: camp.end_date ?? "",
+        target_views: camp.target_views.toString(),
+        target_videos: camp.target_videos.toString(),
+      })
     } catch {
       setError("Failed to load campaign")
       setCampaign(null)
@@ -130,8 +157,64 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
   const totalCreators = creators.length
   const totalPayout = creators.reduce((s, c) => s + c.payout_earned, 0)
 
-  function updatePayoutStatus(creatorId: string, status: PayoutStatus) {
-    setCreators(prev => prev.map(c => c.id === creatorId ? { ...c, payout_status: status } : c))
+  async function updatePayoutStatus(creatorId: string, status: PayoutStatus) {
+    try {
+      await updateCampaignCreatorPayoutStatus(creatorId, status)
+      setCreators(prev => prev.map(c => c.id === creatorId ? { ...c, payout_status: status } : c))
+      toast.success(status === "approved" ? "Payout approved" : "Payout placed on hold")
+    } catch {
+      toast.error("Failed to update payout status")
+    }
+  }
+
+  async function handleApproveAll() {
+    setApprovingAll(true)
+    try {
+      await approveAllCampaignPayouts(id)
+      setCreators(prev => prev.map(c =>
+        c.payout_status === "pending" || c.payout_status === "on_hold"
+          ? { ...c, payout_status: "approved" as PayoutStatus }
+          : c
+      ))
+      toast.success("All pending payouts approved")
+    } catch {
+      toast.error("Failed to approve payouts")
+    } finally {
+      setApprovingAll(false)
+    }
+  }
+
+  async function handleSaveChanges() {
+    setSaving(true)
+    try {
+      const updated = await updateCampaign(id, {
+        name: settingsForm.name.trim(),
+        brand: settingsForm.brand.trim() || null,
+        start_date: settingsForm.start_date || null,
+        end_date: settingsForm.end_date || null,
+        target_views: parseInt(settingsForm.target_views, 10) || 0,
+        target_videos: parseInt(settingsForm.target_videos, 10) || 0,
+      })
+      setCampaign(updated)
+      toast.success("Campaign saved")
+    } catch {
+      toast.error("Failed to save campaign")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteCampaign() {
+    if (!window.confirm("Delete this campaign permanently? This cannot be undone.")) return
+    setDeleting(true)
+    try {
+      await deleteCampaign(id)
+      toast.success("Campaign deleted")
+      window.location.href = "/campaigns"
+    } catch {
+      toast.error("Failed to delete campaign")
+      setDeleting(false)
+    }
   }
 
   const statCards = [
@@ -142,6 +225,8 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
   ]
 
   return (
+    <>
+    <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     <div className="space-y-5 max-w-7xl">
       {/* Back */}
       <Link href="/campaigns" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -165,11 +250,17 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-zinc-400 hover:text-zinc-200 hover:border-white/10 transition-all">
+          <button
+            onClick={() => toast.info("Coming soon", { description: "Export feature launching soon." })}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-zinc-400 hover:text-zinc-200 hover:border-white/10 transition-all"
+          >
             <Download className="w-3.5 h-3.5" />
             Export Report
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-all">
+          <button
+            onClick={() => setActiveTab("Settings")}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-all"
+          >
             <Edit2 className="w-3.5 h-3.5" />
             Edit
           </button>
@@ -293,7 +384,10 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
         <div className="rounded-xl border border-white/[0.06] bg-[#111111] overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
             <h2 className="text-[15px] font-semibold text-white">Creators ({creators.length})</h2>
-            <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-sm font-medium transition-all">
+            <button
+              onClick={() => toast.info("Coming soon", { description: "Adding creators to campaigns is launching soon." })}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-sm font-medium transition-all"
+            >
               <UserPlus className="w-3.5 h-3.5" />
               Add Creator
             </button>
@@ -416,9 +510,13 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
           <div className="rounded-xl border border-white/[0.06] bg-[#111111] overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
               <h2 className="text-[15px] font-semibold text-white">Creator Payouts</h2>
-              <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-medium transition-all">
+              <button
+                onClick={handleApproveAll}
+                disabled={approvingAll}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-medium transition-all disabled:opacity-50"
+              >
                 <Check className="w-3.5 h-3.5" />
-                Approve All
+                {approvingAll ? "Approving…" : "Approve All"}
               </button>
             </div>
             <div className="overflow-x-auto">
@@ -491,36 +589,47 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
         <div className="max-w-xl space-y-4">
           <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-5 space-y-4">
             <h2 className="text-[15px] font-semibold text-white">Campaign Settings</h2>
-            {[
-              { label: "Campaign Name",   value: campaign.name },
-              { label: "Brand / Client",  value: campaign.brand ?? "" },
-              { label: "Start Date",      value: campaign.start_date ?? "" },
-              { label: "End Date",        value: campaign.end_date ?? "" },
-              { label: "Target Views",    value: campaign.target_views.toString() },
-              { label: "Target Videos",  value: campaign.target_videos.toString() },
-            ].map(f => (
-              <div key={f.label} className="space-y-1.5">
+            {([
+              { label: "Campaign Name", key: "name" as const, type: "text" },
+              { label: "Brand / Client", key: "brand" as const, type: "text" },
+              { label: "Start Date", key: "start_date" as const, type: "date" },
+              { label: "End Date", key: "end_date" as const, type: "date" },
+              { label: "Target Views", key: "target_views" as const, type: "number" },
+              { label: "Target Videos", key: "target_videos" as const, type: "number" },
+            ]).map(f => (
+              <div key={f.key} className="space-y-1.5">
                 <label className="text-xs font-medium text-zinc-400">{f.label}</label>
                 <input
-                  defaultValue={f.value}
+                  type={f.type}
+                  value={settingsForm[f.key]}
+                  onChange={e => setSettingsForm(prev => ({ ...prev, [f.key]: e.target.value }))}
                   className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-sm text-zinc-200 outline-none focus:border-purple-500/40 transition-colors"
                 />
               </div>
             ))}
-            <button className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-all">
-              Save Changes
+            <button
+              onClick={handleSaveChanges}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-all disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save Changes"}
             </button>
           </div>
 
           <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 space-y-3">
             <h3 className="text-sm font-semibold text-red-400">Danger Zone</h3>
             <p className="text-xs text-zinc-500">Permanently delete this campaign and all associated data. This cannot be undone.</p>
-            <button className="px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm font-medium transition-all border border-red-500/20">
-              Delete Campaign
+            <button
+              onClick={handleDeleteCampaign}
+              disabled={deleting}
+              className="px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm font-medium transition-all border border-red-500/20 disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Delete Campaign"}
             </button>
           </div>
         </div>
       )}
     </div>
+    </>
   )
 }

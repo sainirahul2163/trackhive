@@ -3,7 +3,6 @@
 import { useState, useRef } from "react"
 import { Zap, Globe, Upload, Building2, Check, Eye, EyeOff } from "lucide-react"
 import { toast, Toaster } from "sonner"
-import Link from "next/link"
 
 /* For demo purposes, treat the user as Agency plan */
 const IS_AGENCY = true
@@ -71,12 +70,12 @@ function UpgradeGate() {
       <p style={{ fontSize: "14px", color: "#71717a", maxWidth: "360px", margin: "0 auto 24px", lineHeight: 1.6 }}>
         White-label branding, custom subdomains and client portals are available on the Agency plan.
       </p>
-      <Link
-        href="#pricing"
-        style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 24px", borderRadius: "9px", backgroundColor: "#7C3AED", color: "#fff", fontSize: "14px", fontWeight: 600, textDecoration: "none", boxShadow: "0 0 20px rgba(124,58,237,0.3)" }}
+      <button
+        onClick={() => toast.info("Coming soon", { description: "White-label launching soon." })}
+        style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 24px", borderRadius: "9px", backgroundColor: "#7C3AED", color: "#fff", fontSize: "14px", fontWeight: 600, border: "none", cursor: "pointer", boxShadow: "0 0 20px rgba(124,58,237,0.3)" }}
       >
         Upgrade to Agency <Zap style={{ width: "14px", height: "14px", fill: "#fff" }} />
-      </Link>
+      </button>
     </div>
   )
 }
@@ -143,7 +142,7 @@ export function WhitelabelSettings() {
     showPayments: false,
     removeWatermark: false,
   })
-  const [saving, setSaving] = useState(false)
+  const [saving] = useState(false)
   const logoRef = useRef<HTMLInputElement>(null)
 
   function set<K extends keyof WLState>(k: K, v: WLState[K]) {
@@ -157,18 +156,16 @@ export function WhitelabelSettings() {
     reader.readAsDataURL(file)
   }
 
+  function handleComingSoon() {
+    toast.info("Coming soon", { description: "White-label launching soon." })
+  }
+
   async function handleSave() {
-    setSaving(true)
-    await new Promise(r => setTimeout(r, 900))
-    setSaving(false)
-    toast.success("White-label settings saved")
+    handleComingSoon()
   }
 
   function handleSubdomainSave() {
-    if (!state.subdomain.trim()) { toast.error("Enter a subdomain"); return }
-    if (!/^[a-z0-9-]+$/.test(state.subdomain)) { toast.error("Subdomain can only contain lowercase letters, numbers and hyphens"); return }
-    set("subdomainStatus", "pending")
-    toast.success("Subdomain saved", { description: "DNS propagation may take up to 24 hours." })
+    handleComingSoon()
   }
 
   if (!IS_AGENCY) return <UpgradeGate />
@@ -233,7 +230,7 @@ export function WhitelabelSettings() {
                   <div style={{ width: "48px", height: "48px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                     {state.logo_url ? <img src={state.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Building2 style={{ width: "20px", height: "20px", color: "#52525b" }} />}
                   </div>
-                  <button onClick={() => logoRef.current?.click()} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "7px", backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#a1a1aa", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>
+                  <button onClick={handleComingSoon} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "7px", backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#a1a1aa", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>
                     <Upload style={{ width: "13px", height: "13px" }} /> Upload Logo
                   </button>
                   <input ref={logoRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoFile(f) }} />

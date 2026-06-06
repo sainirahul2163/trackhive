@@ -80,3 +80,17 @@ export async function insertPayoutRule(
   if (error) throw new Error(error.message)
   return data as PayoutRule
 }
+
+export async function approveAllPendingPayouts(userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("payouts")
+    .update({ status: "approved" })
+    .eq("workspace_id", userId)
+    .eq("status", "pending")
+  if (error) throw new Error(error.message)
+}
+
+export async function deletePayoutRule(id: string): Promise<void> {
+  const { error } = await supabase.from("payout_rules").delete().eq("id", id)
+  if (error) throw new Error(error.message)
+}

@@ -8,6 +8,7 @@ import {
   RefreshCw, AlertCircle,
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { toast, Toaster } from "sonner"
 import { fetchCampaigns } from "@/lib/campaigns-data"
 import { formatNumber } from "@/lib/platform"
 import { useUser } from "@/lib/use-user"
@@ -99,6 +100,8 @@ export default function CampaignsPage() {
   }
 
   return (
+    <>
+    <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     <div className="space-y-5 max-w-7xl">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -263,9 +266,9 @@ export default function CampaignsPage() {
                     <Link href={`/campaigns/${campaign.id}`} className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors" title="View">
                       <Eye className="w-3.5 h-3.5" />
                     </Link>
-                    <button className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
-                    <button className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
-                    <button className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors" title="More"><MoreHorizontal className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => toast.info("Coming soon", { description: "Campaign editing is launching soon." })} className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => toast.info("Coming soon", { description: "Campaign duplication is launching soon." })} className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => toast.info("Coming soon", { description: "More campaign actions are launching soon." })} className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors" title="More"><MoreHorizontal className="w-3.5 h-3.5" /></button>
                   </div>
                 </div>
               </div>
@@ -274,5 +277,6 @@ export default function CampaignsPage() {
         </div>
       )}
     </div>
+    </>
   )
 }

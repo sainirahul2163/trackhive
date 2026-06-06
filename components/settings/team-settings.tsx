@@ -64,7 +64,7 @@ function RoleSelect({ value, onChange }: { value: Role; onChange: (r: Role) => v
 }
 
 export function TeamSettings() {
-  const [members, setMembers]   = useState<TeamMember[]>([])
+  const [members]               = useState<TeamMember[]>([])
   const [invites, setInvites]   = useState<PendingInvite[]>([])
   const [showForm, setShowForm] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
@@ -74,8 +74,8 @@ export function TeamSettings() {
   function removeMember(id: string) {
     const m = members.find(x => x.id === id)
     if (m?.role === "Admin") { toast.error("Cannot remove the Admin"); return }
-    setMembers(prev => prev.filter(x => x.id !== id))
-    toast.success("Member removed")
+    if (!window.confirm(`Remove ${m?.name ?? "this member"} from your team?`)) return
+    toast.info("Coming soon", { description: "Team member management is launching soon." })
   }
 
   function revokeInvite(id: string) {
@@ -86,17 +86,9 @@ export function TeamSettings() {
   async function sendInvite() {
     if (!inviteEmail.trim()) { toast.error("Enter an email address"); return }
     if (!/^\S+@\S+\.\S+$/.test(inviteEmail)) { toast.error("Invalid email address"); return }
-    if (members.some(m => m.email === inviteEmail) || invites.some(i => i.email === inviteEmail)) {
-      toast.error("This email is already in your team"); return
-    }
     setSending(true)
-    await new Promise(r => setTimeout(r, 800))
-    setInvites(prev => [...prev, { id: `i${Date.now()}`, email: inviteEmail.trim(), role: inviteRole, sentAt: "Just now" }])
-    setInviteEmail("")
-    setInviteRole("Member")
-    setShowForm(false)
+    toast.info("Coming soon", { description: "Team invites via email are launching soon." })
     setSending(false)
-    toast.success("Invite sent", { description: `${inviteEmail} will receive an email shortly.` })
   }
 
   return (

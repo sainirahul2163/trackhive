@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { CreditCard, Download, ArrowUpRight, Check, AlertTriangle, Zap } from "lucide-react"
 import { toast, Toaster } from "sonner"
-import Link from "next/link"
 
 interface Invoice {
   id: string
@@ -73,13 +72,13 @@ function SectionCard({ title, children }: { title: string; children: React.React
 export function BillingSettings() {
   const [showCancelModal, setShowCancelModal] = useState(false)
 
-  function handleUpdatePayment() {
-    toast.info("Redirecting to payment portal…")
+  function handleBillingAction() {
+    toast.info("Coming soon", { description: "Stripe integration launching soon." })
   }
 
   function handleCancelConfirm() {
     setShowCancelModal(false)
-    toast.success("Subscription cancelled", { description: "You have access until Jul 1, 2026." })
+    toast.info("Coming soon", { description: "Stripe integration launching soon." })
   }
 
   return (
@@ -102,12 +101,12 @@ export function BillingSettings() {
             </div>
             <p style={{ fontSize: "13px", color: "#71717a" }}>$149/month · Renews Jul 1, 2026</p>
           </div>
-          <Link
-            href="#pricing"
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", backgroundColor: "#7C3AED", color: "#fff", fontSize: "13px", fontWeight: 600, textDecoration: "none", boxShadow: "0 0 16px rgba(124,58,237,0.25)" }}
+          <button
+            onClick={handleBillingAction}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", backgroundColor: "#7C3AED", color: "#fff", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer", boxShadow: "0 0 16px rgba(124,58,237,0.25)" }}
           >
             Upgrade Plan <ArrowUpRight style={{ width: "14px", height: "14px" }} />
-          </Link>
+          </button>
         </div>
 
         {/* Usage meters */}
@@ -163,7 +162,7 @@ export function BillingSettings() {
             </div>
           </div>
           <button
-            onClick={handleUpdatePayment}
+            onClick={handleBillingAction}
             style={{ padding: "7px 14px", borderRadius: "7px", backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#a1a1aa", fontSize: "12px", fontWeight: 500, cursor: "pointer", transition: "all 0.15s" }}
             className="hover:text-white hover:border-white/20"
           >
@@ -192,7 +191,7 @@ export function BillingSettings() {
                 {inv.status}
               </span>
               <button
-                onClick={() => toast.success(`Downloading ${inv.id}…`)}
+                onClick={() => toast.info("Coming soon", { description: "Invoice downloads are launching soon." })}
                 style={{ width: "28px", height: "28px", borderRadius: "6px", backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 className="hover:border-white/20"
               >

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import { toast, Toaster } from "sonner"
 import { fetchCampaigns } from "@/lib/campaigns-data"
 import { useUser } from "@/lib/use-user"
 import {
@@ -60,6 +61,20 @@ function totalFollowers(c: CreatorProfile): number {
   return c.platforms.reduce((s, p) => s + p.followers, 0)
 }
 
+function platformProfileUrl(platform: Platform, handle: string): string {
+  const h = handle.replace(/^@/, "")
+  switch (platform) {
+    case "tiktok":    return `https://www.tiktok.com/@${h}`
+    case "instagram": return `https://www.instagram.com/${h}`
+    case "youtube":   return `https://www.youtube.com/@${h}`
+  }
+}
+
+function primaryPlatform(c: CreatorProfile): { platform: Platform; handle: string } {
+  const sorted = [...c.platforms].sort((a, b) => b.followers - a.followers)
+  return sorted[0] ?? { platform: "tiktok", handle: c.handle }
+}
+
 function ViralBadge({ score }: { score: number }) {
   const c = score >= 9.5 ? { label: "🔥 Viral",      color: "#f87171", bg: "rgba(239,68,68,0.1)" }
           : score >= 8.5 ? { label: "📈 Rising",     color: "#fbbf24", bg: "rgba(245,158,11,0.1)" }
@@ -87,7 +102,7 @@ interface InviteModalProps {
   onClose: () => void
   onSend: (creatorId: string, campaignId: string, message: string) => void
 }
-function InviteModal({ creator, campaigns, onClose, onSend }: InviteModalProps) {
+function InviteModal({ creator, campaigns, onClose }: InviteModalProps) {
   const [selectedCampaign, setSelectedCampaign] = useState("")
   const [message, setMessage] = useState(
     `Hi ${creator.name.split(" ")[0]},\n\nWe love your content and think you'd be a perfect fit for our upcoming campaign. Would you be interested in collaborating?\n\nLooking forward to hearing from you!`
@@ -97,10 +112,9 @@ function InviteModal({ creator, campaigns, onClose, onSend }: InviteModalProps) 
   function handleSend() {
     if (!selectedCampaign) return
     setSending(true)
-    setTimeout(() => {
-      onSend(creator.id, selectedCampaign, message)
-      onClose()
-    }, 900)
+    toast.info("Coming soon", { description: "Invites via email are launching soon." })
+    setSending(false)
+    onClose()
   }
 
   const camp = campaigns.find(c => c.id === selectedCampaign)
@@ -285,7 +299,7 @@ function ProfileDrawer({ creator, onClose, onInvite, inviteSent }: ProfileDrawer
 
         {/* Fixed footer */}
         <div style={{ padding: "14px 22px", borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", gap: "8px" }}>
-          <a href={`https://tiktok.com`} target="_blank" rel="noreferrer"
+          <a href={platformProfileUrl(primaryPlatform(creator).platform, primaryPlatform(creator).handle)} target="_blank" rel="noreferrer"
             style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px", borderRadius: "9px", border: "1px solid rgba(255,255,255,0.09)", color: "#a1a1aa", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}>
             <ExternalLink style={{ width: "13px", height: "13px" }} />
             View profile
@@ -368,6 +382,8 @@ export default function DiscoveryPage() {
   const totalReach = filtered.reduce((s, c) => s + totalFollowers(c), 0)
 
   return (
+    <>
+    <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     <div style={{ maxWidth: "1100px", display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
@@ -602,5 +618,6 @@ export default function DiscoveryPage() {
         />
       )}
     </div>
+    </>
   )
 }
