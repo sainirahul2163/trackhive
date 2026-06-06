@@ -5,6 +5,7 @@ import {
   X, UserPlus, ScanLine, Info, Shield, Send, Check,
   ChevronDown, Search,
 } from "lucide-react"
+import { toast, Toaster } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { fetchTrackedAccounts } from "@/lib/analytics-data"
 import { PlatformIcon } from "@/lib/platform"
@@ -32,6 +33,7 @@ export function InviteCreatorDrawer({ open, onClose }: InviteCreatorDrawerProps)
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) fetchTrackedAccounts(user?.id).then(setAccounts)
@@ -47,9 +49,10 @@ export function InviteCreatorDrawer({ open, onClose }: InviteCreatorDrawerProps)
   async function handleCreate() {
     if (!firstName.trim() || !email.trim()) return
     setCreating(true)
+    setError(null)
     try {
       const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ")
-      const { data, error } = await supabase.from("creators").insert({
+      const { data, error: insertError } = await supabase.from("creators").insert({
         name: fullName,
         first_name: firstName.trim(),
         last_name: lastName.trim() || null,
@@ -58,15 +61,21 @@ export function InviteCreatorDrawer({ open, onClose }: InviteCreatorDrawerProps)
         workspace_id: user?.id ?? null,
       }).select("id").single()
 
-      if (error) throw error
+      if (insertError) throw insertError
 
       if (data?.id && linkedIds.length) {
-        await supabase.from("tracked_accounts").update({ creator_id: data.id }).in("id", linkedIds)
+        const { error: linkError } = await supabase
+          .from("tracked_accounts")
+          .update({ creator_id: data.id })
+          .in("id", linkedIds)
+        if (linkError) throw linkError
       }
 
       setDone(true)
     } catch {
-      setDone(true)
+      const message = "Failed to create creator. Please try again."
+      setError(message)
+      toast.error(message)
     } finally {
       setCreating(false)
     }
@@ -74,7 +83,7 @@ export function InviteCreatorDrawer({ open, onClose }: InviteCreatorDrawerProps)
 
   function handleClose() {
     setFirstName(""); setLastName(""); setEmail(""); setNotes("")
-    setLinkedIds([]); setAccountSearch(""); setDone(false); setMode("off_platform")
+    setLinkedIds([]); setAccountSearch(""); setDone(false); setError(null); setMode("off_platform")
     onClose()
   }
 
@@ -227,6 +236,10 @@ export function InviteCreatorDrawer({ open, onClose }: InviteCreatorDrawerProps)
           )}
         </div>
 
+        {error && !done && (
+          <p className="px-6 pb-2 text-xs text-red-400 bg-red-500/10 border-t border-red-500/20 pt-3">{error}</p>
+        )}
+
         <div className="px-6 py-4 border-t border-white/[0.06] flex-shrink-0">
           {done ? (
             <button onClick={handleClose} className="w-full py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium">Close</button>
@@ -241,6 +254,7 @@ export function InviteCreatorDrawer({ open, onClose }: InviteCreatorDrawerProps)
           )}
         </div>
       </div>
+      <Toaster position="top-right" toastOptions={{ style: { backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", color: "#fafafa" } }} />
     </>
   )
 }

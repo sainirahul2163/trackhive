@@ -26,6 +26,7 @@ export function ProcessPayoutModal({ open, payout, onClose, onSuccess }: Process
   const [adjustmentNote, setAdjustmentNote] = useState("")
   const [showInvoice, setShowInvoice] = useState(false)
   const [invoiceNumber] = useState(() => `INV-${Date.now().toString().slice(-6)}`)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -33,6 +34,7 @@ export function ProcessPayoutModal({ open, payout, onClose, onSuccess }: Process
       setAdjustment("")
       setAdjustmentNote("")
       setShowInvoice(false)
+      setErrorMessage(null)
     }
   }, [open])
 
@@ -45,6 +47,7 @@ export function ProcessPayoutModal({ open, payout, onClose, onSuccess }: Process
 
   async function handleConfirm() {
     setState("processing")
+    setErrorMessage(null)
     try {
       const { error } = await supabase
         .from("payouts")
@@ -62,9 +65,8 @@ export function ProcessPayoutModal({ open, payout, onClose, onSuccess }: Process
       setState("success")
       setTimeout(() => onSuccess(payoutId), 3500)
     } catch {
-      // Optimistic update in demo
-      setState("success")
-      setTimeout(() => onSuccess(payoutId), 3500)
+      setErrorMessage("Failed to process payment. Please try again.")
+      setState("error")
     }
   }
 
@@ -182,6 +184,31 @@ export function ProcessPayoutModal({ open, payout, onClose, onSuccess }: Process
             <div className="w-14 h-14 rounded-full border-2 border-purple-500 border-t-transparent animate-spin mb-6" />
             <p className="text-base font-semibold text-white">Processing Payment...</p>
             <p className="text-sm text-zinc-500 mt-1.5">Sending ${finalAmount.toLocaleString()} to {creator?.name}</p>
+          </div>
+        )}
+
+        {/* ── ERROR STATE ───────────────────────────────────────── */}
+        {state === "error" && (
+          <div className="px-6 py-10 flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center mb-6">
+              <AlertCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">Payment Failed</h3>
+            <p className="text-sm text-zinc-400 mb-6">{errorMessage ?? "Something went wrong. Please try again."}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setState("confirm")}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-all"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg bg-white/[0.06] border border-white/[0.08] text-zinc-300 text-sm font-medium hover:text-white transition-all"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
 

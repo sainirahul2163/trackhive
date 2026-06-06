@@ -67,16 +67,17 @@ export async function fetchAiReports(competitorId: string): Promise<AiReport[]> 
 }
 
 interface AddCompetitorInput {
-  name: string
-  website: string | null
-  handles: Partial<Record<Platform, string | null>>
+  name:      string
+  website:   string | null
+  handles:   Partial<Record<Platform, string | null>>
+  userId:    string
 }
 
-export async function addCompetitor({ name, website, handles }: AddCompetitorInput): Promise<Competitor> {
+export async function addCompetitor({ name, website, handles, userId }: AddCompetitorInput): Promise<Competitor> {
   // Insert competitor
   const { data: comp, error: compErr } = await supabase
     .from("competitors")
-    .insert({ name, website })
+    .insert({ name, website, workspace_id: userId })
     .select()
     .single()
   if (compErr) throw new Error(compErr.message)

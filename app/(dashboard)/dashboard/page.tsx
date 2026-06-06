@@ -110,6 +110,15 @@ export default function DashboardPage() {
 
     const accountIds = (accountsRes.data ?? []).map((a: { id: string }) => a.id)
 
+    let videoIds: string[] = []
+    if (accountIds.length > 0) {
+      const { data: videoIdRows } = await supabase
+        .from("tracked_videos")
+        .select("id")
+        .in("account_id", accountIds)
+      videoIds = (videoIdRows ?? []).map((v: { id: string }) => v.id)
+    }
+
     const [campaignsRes, payoutsRes, videosRes, dailyRes] = await Promise.allSettled([
       supabase
         .from("campaigns")
@@ -132,11 +141,11 @@ export default function DashboardPage() {
             .limit(5)
         : Promise.resolve({ data: [], error: null }),
 
-      accountIds.length > 0
+      videoIds.length > 0
         ? supabase
             .from("video_daily_stats")
             .select("date, views")
-            .in("account_id", accountIds)
+            .in("video_id", videoIds)
             .gte("date", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
             .order("date", { ascending: true })
         : Promise.resolve({ data: [], error: null }),

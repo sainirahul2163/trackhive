@@ -3,12 +3,13 @@
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useState, Suspense } from "react"
-import { Eye, EyeOff, Zap, ArrowRight, Loader2 } from "lucide-react"
+import { Eye, EyeOff, Zap, ArrowRight, Loader2, Check } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 function LoginForm() {
   const searchParams = useSearchParams()
   const next = searchParams.get("next") ?? "/dashboard"
+  const resetSuccess = searchParams.get("reset") === "success"
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -74,6 +75,13 @@ function LoginForm() {
             <h1 className="text-[22px] font-semibold text-white mb-1.5">Welcome back</h1>
             <p className="text-sm text-zinc-500">Sign in to your account</p>
           </div>
+
+          {resetSuccess && (
+            <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 mb-4 flex items-center gap-2">
+              <Check className="w-3.5 h-3.5 flex-shrink-0" />
+              Password updated. Sign in with your new password.
+            </p>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}

@@ -133,8 +133,15 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
     setStatus("saving")
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setErrorMsg("You must be logged in to add an account.")
+        setStatus("error")
+        return
+      }
+
       const newAccount: Omit<TrackedAccount, "id" | "created_at"> = {
-        workspace_id:   null,
+        workspace_id:   user.id,
         platform:       detected.platform,
         username:       preview?.username       ?? detected.username,
         display_name:   preview?.display_name   ?? detected.username,

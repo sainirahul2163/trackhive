@@ -266,10 +266,10 @@ export default function TrendsPage() {
   }
 
   async function handleCreateBoard() {
-    if (!newBoardName.trim()) return
+    if (!newBoardName.trim() || !user) return
     setCreatingBoard(true)
     try {
-      const board = await createBoard(newBoardName.trim())
+      const board = await createBoard(newBoardName.trim(), user.id)
       setBoards(prev => [...prev, board])
     } catch { /* show error via empty boards */ }
     setNewBoardName(""); setShowNewBoard(false); setCreatingBoard(false)

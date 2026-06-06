@@ -4,6 +4,7 @@ import { useState } from "react"
 import { X, Check, Globe, AlertCircle } from "lucide-react"
 import { PlatformIcon, PLATFORM_CONFIG } from "@/lib/platform"
 import { addCompetitor } from "@/lib/competitors-data"
+import { useUser } from "@/lib/use-user"
 import type { Competitor, Platform } from "@/types"
 
 interface AddCompetitorDrawerProps {
@@ -55,6 +56,7 @@ const PLATFORMS: Array<{ key: keyof SocialHandles; platform: Platform; placehold
 ]
 
 export function AddCompetitorDrawer({ open, onClose, onAdd }: AddCompetitorDrawerProps) {
+  const { user } = useUser()
   const [name, setName] = useState("")
   const [website, setWebsite] = useState("")
   const [handles, setHandles] = useState<SocialHandles>({ tiktok: "", instagram: "", youtube: "", facebook: "" })
@@ -70,12 +72,13 @@ export function AddCompetitorDrawer({ open, onClose, onAdd }: AddCompetitorDrawe
   const canSubmit = name.trim().length > 0
 
   async function handleSubmit() {
-    if (!canSubmit) return
+    if (!canSubmit || !user) return
     setSaving(true); setError(null)
     try {
       const comp = await addCompetitor({
         name: name.trim(),
         website: website.trim() || null,
+        userId: user.id,
         handles: {
           tiktok:    handles.tiktok.trim()    || null,
           instagram: handles.instagram.trim() || null,

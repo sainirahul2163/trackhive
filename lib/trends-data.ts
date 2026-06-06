@@ -35,10 +35,10 @@ export async function saveVideoToBoard(boardId: string, videoId: string): Promis
   return data as BoardVideo
 }
 
-export async function createBoard(name: string, campaignId?: string): Promise<InspirationBoard> {
+export async function createBoard(name: string, userId: string, campaignId?: string): Promise<InspirationBoard> {
   const { data, error } = await supabase
     .from("inspiration_boards")
-    .insert({ name, campaign_id: campaignId ?? null })
+    .insert({ name, campaign_id: campaignId ?? null, workspace_id: userId })
     .select()
     .single()
   if (error) throw new Error(error.message)
