@@ -179,6 +179,17 @@ function matchesContentType(
   return true
 }
 
+function normalizeDateKey(value: string): string {
+  return value.split("T")[0]
+}
+
+function utcDateBounds(dateFrom: string, dateTo: string): { start: Date; end: Date } {
+  return {
+    start: new Date(`${dateFrom}T00:00:00.000Z`),
+    end: new Date(`${dateTo}T23:59:59.999Z`),
+  }
+}
+
 /** Earliest video_daily_stats date across accounts — sync boundary for views chart. */
 async function fetchFirstSyncDate(accountIds: string[]): Promise<string | null> {
   if (!accountIds.length) return null
@@ -192,7 +203,7 @@ async function fetchFirstSyncDate(accountIds: string[]): Promise<string | null> 
 
   if (error) throw new Error(error.message)
   if (!data?.length) return null
-  return (data[0] as { date: string }).date
+  return normalizeDateKey((data[0] as { date: string }).date)
 }
 
 function resolveViewsForDay(
@@ -207,6 +218,56 @@ function resolveViewsForDay(
   return postedAtViewsByDate.get(date) ?? 0
 }
 
+async function fetchPostedAtViewsByDate(
+  accountIds: string[],
+  dateFrom: string,
+  dateTo: string,
+  platforms: Platform[],
+  contentType: AnalyticsFilters["contentType"],
+): Promise<Map<string, number>> {
+  if (!accountIds.length) return new Map()
+
+  const { start, end } = utcDateBounds(dateFrom, dateTo)
+
+  console.log("[Views Query]", {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    accountIds,
+  })
+
+  let query = supabase
+    .from("tracked_videos")
+    .select("posted_at, views, platform, duration_seconds")
+    .in("account_id", accountIds)
+    .gte("posted_at", start.toISOString())
+    .lte("posted_at", end.toISOString())
+    .not("posted_at", "is", null)
+
+  if (platforms.length) query = query.in("platform", platforms)
+
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+
+  interface PostedAtRow {
+    posted_at: string
+    views: number | null
+    platform: Platform
+    duration_seconds: number | null
+  }
+
+  const rows = (data ?? []) as PostedAtRow[]
+  console.log("[Views Result]", rows.slice(0, 5))
+
+  const grouped = new Map<string, number>()
+  for (const row of rows) {
+    if (!row.posted_at) continue
+    if (!matchesContentType(row, contentType)) continue
+    const dateKey = normalizeDateKey(row.posted_at)
+    grouped.set(dateKey, (grouped.get(dateKey) ?? 0) + (row.views ?? 0))
+  }
+  return grouped
+}
+
 async function fetchVideosInRange(
   accountIds: string[],
   dateFrom: string,
@@ -216,12 +277,14 @@ async function fetchVideosInRange(
 ): Promise<TrackedVideo[]> {
   if (!accountIds.length) return []
 
+  const { start, end } = utcDateBounds(dateFrom, dateTo)
+
   let query = supabase
     .from("tracked_videos")
     .select("*")
     .in("account_id", accountIds)
-    .gte("posted_at", `${dateFrom}T00:00:00`)
-    .lte("posted_at", `${dateTo}T23:59:59`)
+    .gte("posted_at", start.toISOString())
+    .lte("posted_at", end.toISOString())
 
   if (platforms.length) query = query.in("platform", platforms)
 
@@ -238,11 +301,11 @@ function computeEngagement(views: number, likes: number, comments: number): numb
 
 function eachDayInRange(dateFrom: string, dateTo: string): string[] {
   const days: string[] = []
-  const cur = new Date(`${dateFrom}T12:00:00`)
-  const end = new Date(`${dateTo}T12:00:00`)
+  const cur = new Date(`${dateFrom}T00:00:00.000Z`)
+  const end = new Date(`${dateTo}T00:00:00.000Z`)
   while (cur <= end) {
     days.push(cur.toISOString().slice(0, 10))
-    cur.setDate(cur.getDate() + 1)
+    cur.setUTCDate(cur.getUTCDate() + 1)
   }
   return days
 }
@@ -354,7 +417,6 @@ export async function fetchChartData(
   const filteredVideos = await fetchVideosInRange(
     ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
   )
-  const allowedVideoIds = new Set(filteredVideos.map((v) => v.id))
 
   const { data: stats, error } = await supabase
     .from("video_daily_stats")
@@ -379,17 +441,20 @@ export async function fetchChartData(
 
   const dailyViewsByDate = new Map<string, number>()
   for (const row of (stats ?? []) as unknown as StatRow[]) {
-    if (filters.contentType !== "all" && !allowedVideoIds.has(row.video_id)) continue
     if (filters.platforms.length && !filters.platforms.includes(row.tracked_videos.platform)) continue
-    dailyViewsByDate.set(row.date, (dailyViewsByDate.get(row.date) ?? 0) + row.views)
+    if (!matchesContentType(row.tracked_videos, filters.contentType)) continue
+    const dateKey = normalizeDateKey(row.date)
+    dailyViewsByDate.set(dateKey, (dailyViewsByDate.get(dateKey) ?? 0) + (row.views ?? 0))
   }
 
-  const postedAtViewsByDate = new Map<string, number>()
+  const postedAtViewsByDate = await fetchPostedAtViewsByDate(
+    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
+  )
+
   const postedVideosByDate = new Map<string, number>()
   for (const v of filteredVideos) {
     if (!v.posted_at) continue
-    const d = v.posted_at.slice(0, 10)
-    postedAtViewsByDate.set(d, (postedAtViewsByDate.get(d) ?? 0) + (v.views ?? 0))
+    const d = normalizeDateKey(v.posted_at)
     postedVideosByDate.set(d, (postedVideosByDate.get(d) ?? 0) + 1)
   }
 
@@ -466,7 +531,6 @@ async function fetchInternalDailyMetricBuckets(
   const videos = await fetchVideosInRange(
     ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
   )
-  const allowedVideoIds = new Set(videos.map((v) => v.id))
 
   const bucketMap = new Map<string, InternalDailyBucket>()
   for (const d of days) {
@@ -478,7 +542,7 @@ async function fetchInternalDailyMetricBuckets(
 
   for (const v of videos) {
     if (!v.posted_at) continue
-    const d = v.posted_at.slice(0, 10)
+    const d = normalizeDateKey(v.posted_at)
     const b = bucketMap.get(d)
     if (!b) continue
     b.posted_videos += 1
@@ -508,17 +572,15 @@ async function fetchInternalDailyMetricBuckets(
 
   const dailyViewsByDate = new Map<string, number>()
   for (const row of (stats ?? []) as unknown as StatRow[]) {
-    if (filters.contentType !== "all" && !allowedVideoIds.has(row.video_id)) continue
     if (filters.platforms.length && !filters.platforms.includes(row.tracked_videos.platform)) continue
-    dailyViewsByDate.set(row.date, (dailyViewsByDate.get(row.date) ?? 0) + (row.views ?? 0))
+    if (!matchesContentType(row.tracked_videos, filters.contentType)) continue
+    const dateKey = normalizeDateKey(row.date)
+    dailyViewsByDate.set(dateKey, (dailyViewsByDate.get(dateKey) ?? 0) + (row.views ?? 0))
   }
 
-  const postedAtViewsByDate = new Map<string, number>()
-  for (const v of videos) {
-    if (!v.posted_at) continue
-    const d = v.posted_at.slice(0, 10)
-    postedAtViewsByDate.set(d, (postedAtViewsByDate.get(d) ?? 0) + (v.views ?? 0))
-  }
+  const postedAtViewsByDate = await fetchPostedAtViewsByDate(
+    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
+  )
 
   const firstSyncDate = await fetchFirstSyncDate(ids)
 
