@@ -102,26 +102,45 @@ function isFutureDate(date: Date): boolean {
   return isAfter(startOfDay(date), startOfDay(new Date()))
 }
 
-function isDateInRange(date: Date, start: Date | undefined, end: Date | undefined): boolean {
-  if (!start || !end) return false
-  const d = startOfDay(date)
-  return d >= startOfDay(start) && d <= startOfDay(end)
-}
-
 const RANGE_PICKER_CALENDAR_CLASSNAMES = {
   cell: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
   day: "h-9 w-9 p-0 font-normal rounded-md text-zinc-300",
-  day_selected: "bg-[#7C3AED] text-white hover:bg-[#7C3AED] hover:text-white",
-  day_range_start: "bg-[#7C3AED] text-white rounded-l-md rounded-r-none hover:bg-[#7C3AED]",
-  day_range_end: "bg-[#7C3AED] text-white rounded-r-md rounded-l-none hover:bg-[#7C3AED]",
-  day_range_middle: "bg-[#7C3AED]/20 text-white rounded-none hover:bg-[#7C3AED]/20",
   day_today: "text-white border border-white/40 bg-transparent",
   day_outside: "day-outside text-zinc-600 opacity-50",
   day_disabled: "text-zinc-600 opacity-30 cursor-not-allowed pointer-events-none hover:bg-transparent hover:text-zinc-600",
 } as const
 
+/** v8 styles range/selected days via modifiersStyles — not classNames.day_range_* */
+const RANGE_PICKER_MODIFIERS_STYLES = {
+  selected: {
+    backgroundColor: "#7C3AED",
+    color: "#ffffff",
+    borderRadius: "50%",
+  },
+  range_start: {
+    backgroundColor: "#7C3AED",
+    color: "#ffffff",
+    borderRadius: "50%",
+  },
+  range_end: {
+    backgroundColor: "#7C3AED",
+    color: "#ffffff",
+    borderRadius: "50%",
+  },
+  range_middle: {
+    backgroundColor: "rgba(124, 58, 237, 0.2)",
+    color: "#ffffff",
+    borderRadius: 0,
+  },
+  future: {
+    opacity: 0.3,
+    cursor: "not-allowed",
+    pointerEvents: "none",
+  },
+} as const
+
 const RANGE_PICKER_MODIFIERS_CLASSNAMES = {
-  future: "opacity-30 cursor-not-allowed pointer-events-none hover:bg-transparent hover:text-zinc-600",
+  future: "hover:bg-transparent hover:text-zinc-600",
 } as const
 
 export function AnalyticsBreadcrumb({ section }: { section: string }) {
@@ -155,31 +174,21 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
   const maxDate = useMemo(() => endOfToday(), [])
   const today = useMemo(() => startOfDay(new Date()), [])
 
-  const rangeStart = useMemo(() => {
-    if (!draftFrom && !draftTo) return undefined
-    if (draftFrom && !draftTo) return startOfDay(draftFrom)
-    if (!draftFrom && draftTo) return startOfDay(draftTo)
+  const startDate = useMemo(() => {
+    if (!draftFrom) return undefined
+    if (!draftTo) return startOfDay(draftFrom)
     return startOfDay(draftFrom <= draftTo ? draftFrom : draftTo)
   }, [draftFrom, draftTo])
 
-  const rangeEnd = useMemo(() => {
-    if (!draftFrom && !draftTo) return undefined
-    if (draftFrom && !draftTo) return startOfDay(draftFrom)
-    if (!draftFrom && draftTo) return startOfDay(draftTo)
+  const endDate = useMemo(() => {
+    if (!draftFrom) return undefined
+    if (!draftTo) return startOfDay(draftFrom)
     return startOfDay(draftFrom <= draftTo ? draftTo : draftFrom)
   }, [draftFrom, draftTo])
 
   const rangeModifiers = useMemo(() => ({
     future: (date: Date) => isFutureDate(date),
-    inRange: (date: Date) => isDateInRange(date, rangeStart, rangeEnd),
-    range_start: (date: Date) => (rangeStart ? isSameDay(date, rangeStart) : false),
-    range_end: (date: Date) => (rangeEnd ? isSameDay(date, rangeEnd) : false),
-    range_middle: (date: Date) => {
-      if (!rangeStart || !rangeEnd) return false
-      const d = startOfDay(date)
-      return d > startOfDay(rangeStart) && d < startOfDay(rangeEnd)
-    },
-  }), [rangeStart, rangeEnd])
+  }), [])
 
   const triggerLabel = useMemo(() => getDateRangeLabel(from, to), [from, to])
 
@@ -214,9 +223,7 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
     if (range.to && isFutureDate(range.to)) return
 
     setDraftFrom(startOfDay(range.from))
-    if (range.to) {
-      setDraftTo(startOfDay(range.to))
-    }
+    setDraftTo(range.to ? startOfDay(range.to) : startOfDay(range.from))
     setActivePreset(null)
   }
 
@@ -298,17 +305,18 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
             <Calendar
               mode="range"
               selected={
-                rangeStart
-                  ? { from: rangeStart, to: rangeEnd ?? rangeStart }
+                startDate && endDate
+                  ? { from: startDate, to: endDate }
                   : undefined
               }
               onSelect={handleRangeSelect}
               numberOfMonths={2}
-              defaultMonth={rangeStart ?? draftFrom}
+              defaultMonth={startDate ?? draftFrom}
               showOutsideDays={false}
               disabled={{ after: maxDate }}
               toDate={maxDate}
               modifiers={rangeModifiers}
+              modifiersStyles={RANGE_PICKER_MODIFIERS_STYLES}
               modifiersClassNames={RANGE_PICKER_MODIFIERS_CLASSNAMES}
               classNames={RANGE_PICKER_CALENDAR_CLASSNAMES}
             />
