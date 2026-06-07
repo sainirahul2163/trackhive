@@ -69,9 +69,21 @@ function loadSettings(): ChartSettings {
   }
 }
 
+const SMALL_METRICS: ChartMetricId[] = [
+  "likes",
+  "comments",
+  "shares",
+  "engagement_rate",
+  "active_accounts",
+]
+
 function formatMetricValue(metric: ChartMetricId, value: number): string {
   if (metric === "engagement_rate") return `${value.toFixed(1)}%`
   return formatNumber(value)
+}
+
+function formatAxisTick(v: number): string {
+  return formatNumber(v)
 }
 
 interface ChartTooltipProps {
@@ -229,10 +241,13 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
 
   const leftMetrics = settings.activeMetrics.filter((m) => m !== "posted_videos")
   const hasRightAxis = settings.activeMetrics.includes("posted_videos")
+  const hasViews = settings.activeMetrics.includes("views")
+  const smallMetrics = leftMetrics.filter((m) => SMALL_METRICS.includes(m))
+  const useSecondaryAxis = hasViews && smallMetrics.length > 0
 
   const leftDomain = useMemo((): [number, number] => {
     if (!chartData.length || !leftMetrics.length) return [0, 10]
-    if (leftMetrics.includes("views")) {
+    if (useSecondaryAxis) {
       const maxViews = Math.max(...chartData.map((r) => Number(r.views ?? 0)))
       return maxViews > 0 ? [0, Math.ceil(maxViews * 1.1)] : [0, 10]
     }
@@ -241,14 +256,29 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
       0,
     )
     return max > 0 ? [0, Math.ceil(max * 1.1)] : [0, 10]
-  }, [chartData, leftMetrics])
+  }, [chartData, leftMetrics, useSecondaryAxis])
+
+  const left2Domain = useMemo((): [number, number] => {
+    if (!useSecondaryAxis || !chartData.length) return [0, 10]
+    const max = Math.max(
+      ...chartData.flatMap((r) => smallMetrics.map((m) => Number(r[m] ?? 0))),
+      0,
+    )
+    return max > 0 ? [0, Math.ceil(max * 1.2)] : [0, 10]
+  }, [chartData, smallMetrics, useSecondaryAxis])
+
+  function yAxisIdForMetric(metric: ChartMetricId): "left" | "left2" {
+    if (useSecondaryAxis && SMALL_METRICS.includes(metric)) return "left2"
+    return "left"
+  }
 
   function renderLeftMetric(metric: ChartMetricId) {
     const color = METRIC_CHART_COLORS[metric]
+    const axisId = yAxisIdForMetric(metric)
     const common = {
       key: metric,
       dataKey: metric,
-      yAxisId: "left" as const,
+      yAxisId: axisId,
       isAnimationActive: true,
       animationDuration: 400,
       connectNulls: true,
@@ -442,7 +472,10 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 4, right: 8, left: useSecondaryAxis ? 4 : 0, bottom: 0 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -450,15 +483,29 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
                   axisLine={false}
                   tickLine={false}
                 />
-                <YAxis
-                  yAxisId="left"
-                  domain={leftDomain}
-                  tick={{ fill: "#71717a", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={48}
-                  tickFormatter={(v: number) => formatNumber(v)}
-                />
+                {leftMetrics.length > 0 && (
+                  <YAxis
+                    yAxisId="left"
+                    domain={leftDomain}
+                    tick={{ fill: "#71717a", fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={48}
+                    tickFormatter={formatAxisTick}
+                  />
+                )}
+                {useSecondaryAxis && (
+                  <YAxis
+                    yAxisId="left2"
+                    orientation="left"
+                    domain={left2Domain}
+                    tick={{ fill: "#666666", fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={45}
+                    tickFormatter={formatAxisTick}
+                  />
+                )}
                 <YAxis
                   yAxisId="right"
                   orientation="right"
