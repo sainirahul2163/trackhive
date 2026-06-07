@@ -86,6 +86,10 @@ function formatAxisTick(v: number): string {
   return formatNumber(v)
 }
 
+function metricGradientId(metric: ChartMetricId): string {
+  return `metric-gradient-${metric}`
+}
+
 interface ChartTooltipProps {
   active?: boolean
   payload?: Array<{ dataKey: string; value: number; color: string }>
@@ -267,6 +271,12 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
     return max > 0 ? [0, Math.ceil(max * 1.2)] : [0, 10]
   }, [chartData, smallMetrics, useSecondaryAxis])
 
+  const rightDomain = useMemo((): [number, number] => {
+    if (!hasRightAxis || !chartData.length) return [0, 2]
+    const max = Math.max(...chartData.map((r) => Number(r.posted_videos ?? 0)), 0)
+    return [0, max + 2]
+  }, [chartData, hasRightAxis])
+
   function yAxisIdForMetric(metric: ChartMetricId): "left" | "left2" {
     if (useSecondaryAxis && SMALL_METRICS.includes(metric)) return "left2"
     return "left"
@@ -312,9 +322,9 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
         type="monotone"
         stroke={color}
         strokeWidth={2}
-        fill={color}
-        fillOpacity={0.12}
-        activeDot={{ r: 4, fill: color }}
+        fill={`url(#${metricGradientId(metric)})`}
+        fillOpacity={1}
+        activeDot={{ r: 4, fill: color, strokeWidth: 0 }}
       />
     )
   }
@@ -474,8 +484,28 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart
                 data={chartData}
-                margin={{ top: 4, right: 8, left: useSecondaryAxis ? 4 : 0, bottom: 0 }}
+                margin={{ top: 8, right: hasRightAxis ? 12 : 8, left: useSecondaryAxis ? 4 : 0, bottom: 4 }}
               >
+                {settings.style === "area" && (
+                  <defs>
+                    {leftMetrics.map((metric) => {
+                      const color = METRIC_CHART_COLORS[metric]
+                      return (
+                        <linearGradient
+                          key={metricGradientId(metric)}
+                          id={metricGradientId(metric)}
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+                          <stop offset="100%" stopColor={color} stopOpacity={0} />
+                        </linearGradient>
+                      )
+                    })}
+                  </defs>
+                )}
                 <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -506,31 +536,33 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
                     tickFormatter={formatAxisTick}
                   />
                 )}
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  domain={[0, 10]}
-                  allowDecimals={false}
-                  tick={{ fill: "#71717a", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={28}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                {leftMetrics.map((m) => renderLeftMetric(m))}
+                {hasRightAxis && (
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={rightDomain}
+                    allowDecimals={false}
+                    tick={{ fill: "#71717a", fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={28}
+                  />
+                )}
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(255,255,255,0.08)", strokeWidth: 1 }} />
                 {hasRightAxis && (
                   <Bar
                     key="posted_videos"
                     yAxisId="right"
                     dataKey="posted_videos"
                     fill={METRIC_CHART_COLORS.posted_videos}
-                    barSize={10}
+                    barSize={6}
                     radius={[2, 2, 0, 0]}
-                    fillOpacity={0.9}
+                    fillOpacity={0.85}
                     isAnimationActive
                     animationDuration={400}
                   />
                 )}
+                {leftMetrics.map((m) => renderLeftMetric(m))}
               </ComposedChart>
             </ResponsiveContainer>
           )}

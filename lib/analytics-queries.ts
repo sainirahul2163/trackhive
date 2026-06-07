@@ -179,6 +179,34 @@ function matchesContentType(
   return true
 }
 
+/** Earliest video_daily_stats date across accounts — sync boundary for views chart. */
+async function fetchFirstSyncDate(accountIds: string[]): Promise<string | null> {
+  if (!accountIds.length) return null
+
+  const { data, error } = await supabase
+    .from("video_daily_stats")
+    .select("date, tracked_videos!inner(account_id)")
+    .in("tracked_videos.account_id", accountIds)
+    .order("date", { ascending: true })
+    .limit(1)
+
+  if (error) throw new Error(error.message)
+  if (!data?.length) return null
+  return (data[0] as { date: string }).date
+}
+
+function resolveViewsForDay(
+  date: string,
+  firstSyncDate: string | null,
+  dailyViewsByDate: Map<string, number>,
+  postedAtViewsByDate: Map<string, number>,
+): number {
+  if (firstSyncDate && date >= firstSyncDate) {
+    return dailyViewsByDate.get(date) ?? 0
+  }
+  return postedAtViewsByDate.get(date) ?? 0
+}
+
 async function fetchVideosInRange(
   accountIds: string[],
   dateFrom: string,
@@ -349,26 +377,29 @@ export async function fetchChartData(
     }
   }
 
-  const byDate = new Map<string, ChartPoint>()
+  const dailyViewsByDate = new Map<string, number>()
   for (const row of (stats ?? []) as unknown as StatRow[]) {
     if (filters.contentType !== "all" && !allowedVideoIds.has(row.video_id)) continue
     if (filters.platforms.length && !filters.platforms.includes(row.tracked_videos.platform)) continue
-    const existing = byDate.get(row.date) ?? { date: row.date, views: 0, postedVideos: 0 }
-    existing.views += row.views
-    byDate.set(row.date, existing)
+    dailyViewsByDate.set(row.date, (dailyViewsByDate.get(row.date) ?? 0) + row.views)
   }
 
+  const postedAtViewsByDate = new Map<string, number>()
+  const postedVideosByDate = new Map<string, number>()
   for (const v of filteredVideos) {
     if (!v.posted_at) continue
     const d = v.posted_at.slice(0, 10)
-    const existing = byDate.get(d) ?? { date: d, views: 0, postedVideos: 0 }
-    existing.postedVideos += 1
-    byDate.set(d, existing)
+    postedAtViewsByDate.set(d, (postedAtViewsByDate.get(d) ?? 0) + (v.views ?? 0))
+    postedVideosByDate.set(d, (postedVideosByDate.get(d) ?? 0) + 1)
   }
 
-  return eachDayInRange(filters.dateFrom, filters.dateTo).map(
-    (d) => byDate.get(d) ?? { date: d, views: 0, postedVideos: 0 },
-  )
+  const firstSyncDate = await fetchFirstSyncDate(ids)
+
+  return eachDayInRange(filters.dateFrom, filters.dateTo).map((d) => ({
+    date: d,
+    views: resolveViewsForDay(d, firstSyncDate, dailyViewsByDate, postedAtViewsByDate),
+    postedVideos: postedVideosByDate.get(d) ?? 0,
+  }))
 }
 
 function aggregationBucketKey(dateStr: string, aggregation: ChartAggregation): string {
@@ -489,14 +520,11 @@ async function fetchInternalDailyMetricBuckets(
     postedAtViewsByDate.set(d, (postedAtViewsByDate.get(d) ?? 0) + (v.views ?? 0))
   }
 
-  // Merge views: daily_stats per date takes priority; fallback to posted_at views
+  const firstSyncDate = await fetchFirstSyncDate(ids)
+
   for (const d of days) {
     const b = bucketMap.get(d)!
-    if (dailyViewsByDate.has(d)) {
-      b.views = dailyViewsByDate.get(d)!
-    } else {
-      b.views = postedAtViewsByDate.get(d) ?? 0
-    }
+    b.views = resolveViewsForDay(d, firstSyncDate, dailyViewsByDate, postedAtViewsByDate)
   }
 
   return days.map((d) => bucketMap.get(d)!)
