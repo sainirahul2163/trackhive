@@ -11,7 +11,6 @@ import {
   ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts"
-import { subDays, differenceInCalendarDays } from "date-fns"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PlatformIcon, formatNumber } from "@/lib/platform"
@@ -19,6 +18,7 @@ import {
   AnalyticsBreadcrumb, AccountMultiSelect, ProjectsPlaceholder,
   DateRangePicker, PlatformToggles, ContentTypeToggles,
   InternalAccountsDropdown, InfoTooltip, filtersFromState,
+  defaultDateRange, getDateRangeLabel,
 } from "@/components/analytics/analytics-shared"
 import {
   fetchUserAccountIds, fetchOverviewMetrics, fetchChartData,
@@ -39,8 +39,9 @@ export default function AnalyticsOverviewPage() {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
   const [platforms, setPlatforms] = useState<Platform[]>(["tiktok", "instagram", "youtube", "facebook"])
   const [contentType, setContentType] = useState<AnalyticsFilters["contentType"]>("all")
-  const [dateFrom, setDateFrom] = useState(subDays(new Date(), 30))
-  const [dateTo, setDateTo] = useState(new Date())
+  const defaultRange = defaultDateRange()
+  const [dateFrom, setDateFrom] = useState(defaultRange.from)
+  const [dateTo, setDateTo] = useState(defaultRange.to)
   const [showViews, setShowViews] = useState(true)
   const [showPosted, setShowPosted] = useState(true)
   const [topVideoMetric, setTopVideoMetric] = useState<"views" | "likes" | "comments">("views")
@@ -60,15 +61,10 @@ export default function AnalyticsOverviewPage() {
     [selectedAccounts, platforms, contentType, dateFrom, dateTo],
   )
 
-  const kpiPeriodLabel = useMemo(() => {
-    const days = differenceInCalendarDays(dateTo, dateFrom) + 1
-    if (days === 30) return "Last 30 days"
-    if (days === 7) return "Last 7 days"
-    if (days === 90) return "Last 90 days"
-    const from = dateFrom.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    const to = dateTo.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    return `${from} – ${to}`
-  }, [dateFrom, dateTo])
+  const kpiPeriodLabel = useMemo(
+    () => getDateRangeLabel(dateFrom, dateTo),
+    [dateFrom, dateTo],
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -77,12 +73,14 @@ export default function AnalyticsOverviewPage() {
       setAccounts(accs)
       const ids = await fetchUserAccountIds(user?.id)
 
+      const scopedIds = filters.accountIds.length ? filters.accountIds : ids
+
       const [m, chart, videos, tops, hm, sync] = await Promise.all([
         fetchOverviewMetrics(filters, ids),
         fetchChartData(filters, ids),
         fetchTopVideos(filters, ids, topVideoMetric, topVideoCount),
         fetchTopAccounts(filters, ids, topAccountCount),
-        fetchHeatmapData(user?.id),
+        fetchHeatmapData(user?.id, scopedIds),
         fetchSyncStatus(user?.id),
       ])
 
@@ -113,23 +111,23 @@ export default function AnalyticsOverviewPage() {
   ] : []
 
   const heatmapWeeks = useMemo(() => {
-    const weeks: number[][] = []
+    const weeks: { count: number; date: string }[][] = []
     const start = new Date()
     start.setDate(start.getDate() - 83)
     for (let w = 0; w < 12; w++) {
-      const week: number[] = []
+      const week: { count: number; date: string }[] = []
       for (let d = 0; d < 7; d++) {
         const cell = new Date(start)
         cell.setDate(start.getDate() + w * 7 + d)
         const key = cell.toISOString().slice(0, 10)
-        week.push(heatmap.get(key) ?? 0)
+        week.push({ count: heatmap.get(key) ?? 0, date: key })
       }
       weeks.push(week)
     }
     return weeks
   }, [heatmap])
 
-  const maxHeat = Math.max(...heatmapWeeks.flat(), 1)
+  const maxHeat = Math.max(...heatmapWeeks.flat().map((c) => c.count), 1)
 
   return (
     <div className="space-y-5 max-w-7xl">
@@ -255,9 +253,9 @@ export default function AnalyticsOverviewPage() {
             <div className="flex items-center gap-2">
               <div>
                 <span className="text-sm font-semibold text-white">Top Accounts</span>
-                <p className="text-[10px] text-zinc-500 mt-0.5">Ranked by Total Views (All Time)</p>
+                <p className="text-[10px] text-zinc-500 mt-0.5">Ranked by views in selected period</p>
               </div>
-              <InfoTooltip text="Lifetime total views from tracked_accounts — not filtered by date range" />
+              <InfoTooltip text={`Accounts that posted in ${kpiPeriodLabel}, ranked by total views from those posts`} />
             </div>
             <select value={topAccountCount} onChange={(e) => setTopAccountCount(Number(e.target.value))} className="text-xs bg-white/[0.04] border border-white/[0.08] rounded px-2 py-1 text-zinc-400 outline-none">
               {[5, 10, 20].map((n) => <option key={n} value={n}>{n}</option>)}
@@ -279,11 +277,11 @@ export default function AnalyticsOverviewPage() {
                 </div>
                 <div className="text-right">
                   <span className="text-xs font-semibold text-white">{formatNumber(a.total_views ?? 0)}</span>
-                  <p className="text-[9px] text-zinc-600">All time</p>
+                  <p className="text-[9px] text-zinc-600">{kpiPeriodLabel}</p>
                 </div>
               </Link>
             ))}
-            {!topAccounts.length && <p className="text-xs text-zinc-600 py-4 text-center">No accounts yet</p>}
+            {!topAccounts.length && <p className="text-xs text-zinc-600 py-4 text-center">No accounts posted in this period</p>}
           </div>
         </div>
       </div>
@@ -301,17 +299,21 @@ export default function AnalyticsOverviewPage() {
           <div className="inline-flex gap-1">
             {heatmapWeeks.map((week, wi) => (
               <div key={wi} className="flex flex-col gap-1">
-                {week.map((count, di) => {
-                  const intensity = count / maxHeat
-                  const bg = count === 0
+                {week.map((cell, di) => {
+                  const intensity = cell.count / maxHeat
+                  const inRange = cell.date >= filters.dateFrom && cell.date <= filters.dateTo
+                  const bg = cell.count === 0
                     ? "rgba(255,255,255,0.04)"
                     : `rgba(249,115,22,${0.2 + intensity * 0.8})`
                   return (
                     <div
                       key={di}
-                      title={`${count} posts`}
+                      title={`${cell.date}: ${cell.count} posts`}
                       className="w-3 h-3 rounded-sm"
-                      style={{ backgroundColor: bg }}
+                      style={{
+                        backgroundColor: bg,
+                        boxShadow: inRange ? "inset 0 0 0 1px #7C3AED, 0 0 0 1px rgba(124,58,237,0.35)" : undefined,
+                      }}
                     />
                   )
                 })}

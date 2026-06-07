@@ -152,6 +152,71 @@ function computeEngagement(views: number, likes: number, comments: number): numb
   return Math.round(((likes + comments) / views) * 100 * 100) / 100
 }
 
+function eachDayInRange(dateFrom: string, dateTo: string): string[] {
+  const days: string[] = []
+  const cur = new Date(`${dateFrom}T12:00:00`)
+  const end = new Date(`${dateTo}T12:00:00`)
+  while (cur <= end) {
+    days.push(cur.toISOString().slice(0, 10))
+    cur.setDate(cur.getDate() + 1)
+  }
+  return days
+}
+
+interface DailyStatViewsRow {
+  views: number
+  video_id: string
+  tracked_videos: {
+    account_id: string
+    platform: Platform
+    duration_seconds: number | null
+  }
+}
+
+async function sumViewsFromDailyStats(
+  ids: string[],
+  dateFrom: string,
+  dateTo: string,
+  platforms: Platform[],
+  contentType: AnalyticsFilters["contentType"],
+  allowedVideoIds: Set<string>,
+): Promise<{ total: number; hasStats: boolean }> {
+  const { data, error } = await supabase
+    .from("video_daily_stats")
+    .select("views, video_id, tracked_videos!inner(account_id, platform, duration_seconds)")
+    .in("tracked_videos.account_id", ids)
+    .gte("date", dateFrom)
+    .lte("date", dateTo)
+
+  if (error) throw new Error(error.message)
+
+  let total = 0
+  let hasStats = false
+  for (const row of (data ?? []) as unknown as DailyStatViewsRow[]) {
+    if (platforms.length && !platforms.includes(row.tracked_videos.platform)) continue
+    if (contentType !== "all" && !allowedVideoIds.has(row.video_id)) continue
+    hasStats = true
+    total += row.views ?? 0
+  }
+  return { total, hasStats }
+}
+
+async function resolveViewsInRange(
+  ids: string[],
+  dateFrom: string,
+  dateTo: string,
+  platforms: Platform[],
+  contentType: AnalyticsFilters["contentType"],
+  videosInRange: TrackedVideo[],
+): Promise<number> {
+  const allowedVideoIds = new Set(videosInRange.map((v) => v.id))
+  const { total, hasStats } = await sumViewsFromDailyStats(
+    ids, dateFrom, dateTo, platforms, contentType, allowedVideoIds,
+  )
+  if (hasStats) return total
+  return videosInRange.reduce((s, v) => s + (v.views ?? 0), 0)
+}
+
 export async function fetchOverviewMetrics(
   filters: AnalyticsFilters,
   accountIds: string[],
@@ -159,7 +224,9 @@ export async function fetchOverviewMetrics(
   const ids = filters.accountIds.length ? filters.accountIds : accountIds
   const videos = await fetchVideosInRange(ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType)
 
-  const views = videos.reduce((s, v) => s + (v.views ?? 0), 0)
+  const views = await resolveViewsInRange(
+    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType, videos,
+  )
   const likes = videos.reduce((s, v) => s + v.likes, 0)
   const comments = videos.reduce((s, v) => s + v.comments, 0)
   const engagement = computeEngagement(views, likes, comments)
@@ -167,21 +234,24 @@ export async function fetchOverviewMetrics(
 
   const prev = previousPeriod(filters.dateFrom, filters.dateTo)
   const prevVideos = await fetchVideosInRange(ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType)
-  const prevViews = prevVideos.reduce((s, v) => s + (v.views ?? 0), 0)
+  const prevViews = await resolveViewsInRange(
+    ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType, prevVideos,
+  )
   const prevLikes = prevVideos.reduce((s, v) => s + v.likes, 0)
   const prevComments = prevVideos.reduce((s, v) => s + v.comments, 0)
   const prevEngagement = computeEngagement(prevViews, prevLikes, prevComments)
+  const prevActiveAccounts = new Set(prevVideos.map((v) => v.account_id)).size
 
   return {
     postedVideos: videos.length,
-    activeAccounts: activeAccountSet.size || ids.length,
+    activeAccounts: activeAccountSet.size,
     views,
     likes,
     comments,
     engagement,
     deltas: {
       postedVideos: videos.length - prevVideos.length,
-      activeAccounts: activeAccountSet.size - new Set(prevVideos.map((v) => v.account_id)).size,
+      activeAccounts: activeAccountSet.size - prevActiveAccounts,
       views: views - prevViews,
       likes: likes - prevLikes,
       comments: comments - prevComments,
@@ -240,7 +310,9 @@ export async function fetchChartData(
     byDate.set(d, existing)
   }
 
-  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
+  return eachDayInRange(filters.dateFrom, filters.dateTo).map(
+    (d) => byDate.get(d) ?? { date: d, views: 0, postedVideos: 0 },
+  )
 }
 
 export async function fetchTopVideos(
@@ -306,23 +378,54 @@ export async function fetchTopAccounts(
   const ids = filters.accountIds.length ? filters.accountIds : accountIds
   if (!ids.length) return []
 
+  const videos = await fetchVideosInRange(
+    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
+  )
+  if (!videos.length) return []
+
+  const viewsByAccount = new Map<string, number>()
+  for (const v of videos) {
+    viewsByAccount.set(
+      v.account_id,
+      (viewsByAccount.get(v.account_id) ?? 0) + (v.views ?? 0),
+    )
+  }
+
+  const activeIds = Array.from(viewsByAccount.keys())
   let query = supabase
     .from("tracked_accounts")
-    .select("id, username, display_name, avatar_url, platform, total_views")
-    .in("id", ids)
-    .order("total_views", { ascending: false })
-    .limit(limit)
+    .select("id, username, display_name, avatar_url, platform")
+    .in("id", activeIds)
 
   if (filters.platforms.length) query = query.in("platform", filters.platforms)
 
   const { data, error } = await query
   if (error) throw new Error(error.message)
 
-  return (data ?? []) as TopAccountRow[]
+  interface AccountRow {
+    id: string
+    username: string
+    display_name: string | null
+    avatar_url: string | null
+    platform: Platform
+  }
+
+  return ((data ?? []) as AccountRow[])
+    .map((a) => ({
+      ...a,
+      total_views: viewsByAccount.get(a.id) ?? 0,
+    }))
+    .sort((a, b) => (b.total_views ?? 0) - (a.total_views ?? 0))
+    .slice(0, limit)
 }
 
-export async function fetchHeatmapData(userId?: string): Promise<Map<string, number>> {
-  const accountIds = await fetchUserAccountIds(userId)
+export async function fetchHeatmapData(
+  userId?: string,
+  scopedAccountIds?: string[],
+): Promise<Map<string, number>> {
+  const accountIds = scopedAccountIds?.length
+    ? scopedAccountIds
+    : await fetchUserAccountIds(userId)
   if (!accountIds.length) return new Map()
 
   const since = new Date()

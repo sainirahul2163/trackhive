@@ -1,13 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import {
   AtSign, FolderOpen, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-  ChevronDown, X, Video, ImageIcon, Info, Download, Settings, SlidersHorizontal,
+  ChevronDown, CalendarDays, Video, ImageIcon, Info, Download, Settings, SlidersHorizontal,
   Link2, FileText,
 } from "lucide-react"
-import { format, subDays, addDays } from "date-fns"
+import {
+  format, subDays, startOfDay, startOfMonth, endOfMonth, subMonths, isSameDay,
+} from "date-fns"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { PlatformIcon, PLATFORM_CONFIG } from "@/lib/platform"
@@ -15,6 +17,80 @@ import type { Platform, TrackedAccount } from "@/types"
 import type { AnalyticsFilters } from "@/lib/analytics-queries"
 
 const ALL_PLATFORMS: Platform[] = ["tiktok", "instagram", "youtube", "facebook"]
+
+const DATE_PRESETS = [
+  { id: "today",     label: "Today" },
+  { id: "yesterday", label: "Yesterday" },
+  { id: "last7",     label: "Last 7 days" },
+  { id: "last30",    label: "Last 30 days" },
+  { id: "last90",    label: "Last 90 days" },
+  { id: "thisMonth", label: "This month" },
+  { id: "lastMonth", label: "Last month" },
+] as const
+
+type DatePresetId = typeof DATE_PRESETS[number]["id"]
+
+function getPresetRange(preset: DatePresetId): { from: Date; to: Date } {
+  const today = startOfDay(new Date())
+  switch (preset) {
+    case "today":
+      return { from: today, to: today }
+    case "yesterday": {
+      const y = subDays(today, 1)
+      return { from: y, to: y }
+    }
+    case "last7":
+      return { from: subDays(today, 6), to: today }
+    case "last30":
+      return { from: subDays(today, 29), to: today }
+    case "last90":
+      return { from: subDays(today, 89), to: today }
+    case "thisMonth":
+      return { from: startOfMonth(today), to: today }
+    case "lastMonth": {
+      const prev = subMonths(today, 1)
+      return { from: startOfMonth(prev), to: endOfMonth(prev) }
+    }
+  }
+}
+
+export function defaultDateRange(): { from: Date; to: Date } {
+  return getPresetRange("last30")
+}
+
+function formatRangeShort(from: Date, to: Date): string {
+  if (from.getFullYear() === to.getFullYear()) {
+    return `${format(from, "MMM d")} – ${format(to, "MMM d")}`
+  }
+  return `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`
+}
+
+function formatRangeFull(from: Date, to: Date): string {
+  if (from.getFullYear() === to.getFullYear()) {
+    return `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`
+  }
+  return `${format(from, "MMM d, yyyy")} – ${format(to, "MMM d, yyyy")}`
+}
+
+export function getDateRangeLabel(from: Date, to: Date): string {
+  for (const preset of DATE_PRESETS) {
+    const range = getPresetRange(preset.id)
+    if (isSameDay(from, range.from) && isSameDay(to, range.to)) {
+      return preset.label
+    }
+  }
+  return formatRangeShort(from, to)
+}
+
+function detectPreset(from: Date, to: Date): DatePresetId | null {
+  for (const preset of DATE_PRESETS) {
+    const range = getPresetRange(preset.id)
+    if (isSameDay(from, range.from) && isSameDay(to, range.to)) {
+      return preset.id
+    }
+  }
+  return null
+}
 
 export function AnalyticsBreadcrumb({ section }: { section: string }) {
   return (
@@ -36,66 +112,182 @@ interface DateRangePickerProps {
   from: Date
   to: Date
   onChange: (from: Date, to: Date) => void
-  label?: string
 }
 
-export function DateRangePicker({ from, to, onChange, label = "Last 30 days" }: DateRangePickerProps) {
+export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
   const [open, setOpen] = useState(false)
+  const [draftFrom, setDraftFrom] = useState(from)
+  const [draftTo, setDraftTo] = useState(to)
+  const [activePreset, setActivePreset] = useState<DatePresetId | null>("last30")
+
+  const triggerLabel = useMemo(() => getDateRangeLabel(from, to), [from, to])
+
+  useEffect(() => {
+    if (open) {
+      setDraftFrom(from)
+      setDraftTo(to)
+      setActivePreset(detectPreset(from, to))
+    }
+  }, [open, from, to])
+
+  function applyDraft() {
+    if (!draftFrom || !draftTo) return
+    const start = draftFrom <= draftTo ? draftFrom : draftTo
+    const end = draftFrom <= draftTo ? draftTo : draftFrom
+    onChange(startOfDay(start), startOfDay(end))
+    setOpen(false)
+  }
+
+  function cancelDraft() {
+    setDraftFrom(from)
+    setDraftTo(to)
+    setActivePreset(detectPreset(from, to))
+    setOpen(false)
+  }
+
+  function selectPreset(id: DatePresetId) {
+    const range = getPresetRange(id)
+    setDraftFrom(range.from)
+    setDraftTo(range.to)
+    setActivePreset(id)
+  }
+
+  const footerLabel = draftFrom && draftTo
+    ? formatRangeFull(
+        draftFrom <= draftTo ? draftFrom : draftTo,
+        draftFrom <= draftTo ? draftTo : draftFrom,
+      )
+    : "Select a date range"
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-zinc-300 hover:border-white/15 transition-colors"
+        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-zinc-300 hover:border-white/15 transition-colors min-w-[140px]"
       >
-        <span>{label}</span>
-        <span className="text-[10px] text-zinc-600 uppercase">UTC</span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            const n = defaultRange()
-            onChange(n.from, n.to)
-          }}
-          className="p-0.5 hover:text-white text-zinc-600"
-        >
-          <X className="w-3 h-3" />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onChange(subDays(from, 30), subDays(to, 30)) }}
-          className="p-0.5 hover:text-white text-zinc-600"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onChange(addDays(from, 30), addDays(to, 30)) }}
-          className="p-0.5 hover:text-white text-zinc-600"
-        >
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
+        <CalendarDays className="w-3.5 h-3.5 text-zinc-500" />
+        <span className="truncate">{triggerLabel}</span>
+        <ChevronDown className="w-3.5 h-3.5 ml-auto text-zinc-500" />
       </PopoverTrigger>
-      <PopoverContent className="w-auto bg-[#1a1a1a] border-white/10 p-0" align="start">
-        <Calendar
-          mode="range"
-          selected={{ from, to }}
-          onSelect={(range) => {
-            if (range?.from && range?.to) {
-              onChange(range.from, range.to)
-              setOpen(false)
-            }
-          }}
-          numberOfMonths={2}
-        />
+      <PopoverContent
+        className="w-auto p-0 overflow-hidden"
+        align="start"
+        style={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)" }}
+      >
+        <div style={{ display: "flex" }}>
+          {/* Preset sidebar */}
+          <div
+            style={{
+              width: "148px",
+              flexShrink: 0,
+              borderRight: "1px solid rgba(255,255,255,0.08)",
+              padding: "12px 8px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "2px",
+            }}
+          >
+            {DATE_PRESETS.map((preset) => {
+              const selected = activePreset === preset.id
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => selectPreset(preset.id)}
+                  style={{
+                    textAlign: "left",
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    fontWeight: selected ? 600 : 400,
+                    color: selected ? "#fafafa" : "#a1a1aa",
+                    backgroundColor: selected ? "rgba(124,58,237,0.15)" : "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    transition: "background-color 0.15s, color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!selected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!selected) e.currentTarget.style.backgroundColor = "transparent"
+                  }}
+                >
+                  {preset.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Calendars + footer */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <Calendar
+              mode="range"
+              selected={{ from: draftFrom, to: draftTo }}
+              onSelect={(range) => {
+                if (range?.from) setDraftFrom(range.from)
+                if (range?.to) setDraftTo(range.to)
+                if (range?.from && range?.to) setActivePreset(null)
+              }}
+              numberOfMonths={2}
+              defaultMonth={draftFrom}
+            />
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                padding: "12px 16px",
+                borderTop: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <span style={{ fontSize: "13px", color: "#e4e4e7", fontWeight: 500 }}>
+                {footerLabel}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={cancelDraft}
+                  style={{
+                    padding: "7px 14px",
+                    borderRadius: "7px",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "#a1a1aa",
+                    backgroundColor: "transparent",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={applyDraft}
+                  disabled={!draftFrom || !draftTo}
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: "7px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: "#fff",
+                    backgroundColor: "#7C3AED",
+                    border: "none",
+                    cursor: draftFrom && draftTo ? "pointer" : "not-allowed",
+                    opacity: draftFrom && draftTo ? 1 : 0.5,
+                    boxShadow: "0 0 16px rgba(124,58,237,0.25)",
+                  }}
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   )
-}
-
-function defaultRange() {
-  const to = new Date()
-  const from = subDays(to, 30)
-  return { from, to }
 }
 
 interface AccountMultiSelectProps {

@@ -140,7 +140,6 @@ export default function AnalyticsVideosPage() {
         <DateRangePicker
           from={rangeFrom}
           to={rangeTo}
-          label={dateFrom ? "Custom range" : "Filter by date"}
           onChange={(f, t) => { setDateFrom(f); setDateTo(t) }}
         />
         <PlatformToggles selected={platforms} onChange={setPlatforms} />
