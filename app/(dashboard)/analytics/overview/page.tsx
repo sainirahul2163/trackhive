@@ -7,12 +7,9 @@ import {
   Video, Users, Play, Heart, MessageCircle, Activity,
   MoreHorizontal, ArrowRight, Flame,
 } from "lucide-react"
-import {
-  ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
-} from "recharts"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { MetricsChart } from "@/components/analytics/metrics-chart"
 import { PlatformIcon, formatNumber } from "@/lib/platform"
 import {
   AnalyticsBreadcrumb, AccountMultiSelect, ProjectsPlaceholder,
@@ -21,7 +18,7 @@ import {
   defaultDateRange, getDateRangeLabel,
 } from "@/components/analytics/analytics-shared"
 import {
-  fetchUserAccountIds, fetchOverviewMetrics, fetchChartData,
+  fetchUserAccountIds, fetchOverviewMetrics,
   fetchTopVideos, fetchTopAccounts, fetchHeatmapData,
   calculatePostingStreak, fetchSyncStatus, formatDelta, timeAgoLong,
   type AnalyticsFilters,
@@ -42,14 +39,12 @@ export default function AnalyticsOverviewPage() {
   const defaultRange = defaultDateRange()
   const [dateFrom, setDateFrom] = useState(defaultRange.from)
   const [dateTo, setDateTo] = useState(defaultRange.to)
-  const [showViews, setShowViews] = useState(true)
-  const [showPosted, setShowPosted] = useState(true)
+  const [accountIds, setAccountIds] = useState<string[]>([])
   const [topVideoMetric, setTopVideoMetric] = useState<"views" | "likes" | "comments">("views")
   const [topVideoCount, setTopVideoCount] = useState(5)
   const [topAccountCount, setTopAccountCount] = useState(5)
 
   const [metrics, setMetrics] = useState<Awaited<ReturnType<typeof fetchOverviewMetrics>> | null>(null)
-  const [chartData, setChartData] = useState<Awaited<ReturnType<typeof fetchChartData>>>([])
   const [topVideos, setTopVideos] = useState<Awaited<ReturnType<typeof fetchTopVideos>>>([])
   const [topAccounts, setTopAccounts] = useState<Awaited<ReturnType<typeof fetchTopAccounts>>>([])
   const [heatmap, setHeatmap] = useState<Map<string, number>>(new Map())
@@ -72,12 +67,12 @@ export default function AnalyticsOverviewPage() {
       const accs = await fetchTrackedAccounts(user?.id)
       setAccounts(accs)
       const ids = await fetchUserAccountIds(user?.id)
+      setAccountIds(ids)
 
       const scopedIds = filters.accountIds.length ? filters.accountIds : ids
 
-      const [m, chart, videos, tops, hm, sync] = await Promise.all([
+      const [m, videos, tops, hm, sync] = await Promise.all([
         fetchOverviewMetrics(filters, ids),
-        fetchChartData(filters, ids),
         fetchTopVideos(filters, ids, topVideoMetric, topVideoCount),
         fetchTopAccounts(filters, ids, topAccountCount),
         fetchHeatmapData(user?.id, scopedIds),
@@ -85,10 +80,6 @@ export default function AnalyticsOverviewPage() {
       ])
 
       setMetrics(m)
-      setChartData(chart.map((d) => ({
-        ...d,
-        label: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      })))
       setTopVideos(videos)
       setTopAccounts(tops)
       setHeatmap(hm)
@@ -174,38 +165,7 @@ export default function AnalyticsOverviewPage() {
         </>
       )}
 
-      <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-white">Metrics</span>
-            {showPosted && (
-              <button onClick={() => setShowPosted(false)} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-orange-500/15 text-orange-400 border border-orange-500/25">
-                Posted Videos ×
-              </button>
-            )}
-            {showViews && (
-              <button onClick={() => setShowViews(false)} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-500/15 text-blue-400 border border-blue-500/25">
-                Views ×
-              </button>
-            )}
-            <button className="px-2 py-1 rounded-full text-xs text-zinc-500 border border-white/[0.08] hover:text-zinc-300">+ Add</button>
-          </div>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-zinc-400 border border-white/[0.08] hover:text-white">
-            Settings
-          </button>
-        </div>
-        <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-            <XAxis dataKey="label" tick={{ fill: "#71717a", fontSize: 11 }} />
-            {showViews && <YAxis yAxisId="left" tick={{ fill: "#71717a", fontSize: 11 }} />}
-            {showPosted && <YAxis yAxisId="right" orientation="right" tick={{ fill: "#71717a", fontSize: 11 }} />}
-            <Tooltip contentStyle={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} />
-            {showViews && <Area yAxisId="left" type="monotone" dataKey="views" fill="#3b82f6" fillOpacity={0.2} stroke="#3b82f6" strokeWidth={2} />}
-            {showPosted && <Bar yAxisId="right" dataKey="postedVideos" fill="#f97316" barSize={12} radius={[2, 2, 0, 0]} />}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+      <MetricsChart filters={filters} accountIds={accountIds} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-xl border border-white/[0.06] bg-[#111111] p-4">

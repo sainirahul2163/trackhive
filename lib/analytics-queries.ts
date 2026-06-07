@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { format, startOfWeek, startOfMonth } from "date-fns"
 import type { Platform, TrackedAccount, TrackedVideo, VideoDailyStat } from "@/types"
 
 export interface AnalyticsFilters {
@@ -30,6 +31,61 @@ export interface ChartPoint {
   date: string
   views: number
   postedVideos: number
+}
+
+export type ChartMetricId =
+  | "views"
+  | "posted_videos"
+  | "likes"
+  | "comments"
+  | "shares"
+  | "active_accounts"
+  | "engagement_rate"
+
+export type ChartAggregation = "day" | "week" | "month"
+export type ChartMode = "discrete" | "cumulative"
+export type ChartStyle = "area" | "line" | "bar"
+
+export interface MetricDataPoint {
+  date: string
+  value: number
+}
+
+export interface DailyMetricBucket {
+  date: string
+  views: number
+  posted_videos: number
+  likes: number
+  comments: number
+  shares: number
+  active_accounts: number
+  engagement_rate: number
+}
+
+interface InternalDailyBucket extends DailyMetricBucket {
+  accountIds: Set<string>
+  engagementSum: number
+  engagementCount: number
+}
+
+export const METRIC_CHART_COLORS: Record<ChartMetricId, string> = {
+  views:            "#3B82F6",
+  posted_videos:    "#B45309",
+  likes:            "#EC4899",
+  comments:         "#8B5CF6",
+  shares:           "#10B981",
+  engagement_rate:  "#F59E0B",
+  active_accounts:  "#06B6D4",
+}
+
+export const METRIC_CHART_LABELS: Record<ChartMetricId, string> = {
+  views:            "Views",
+  posted_videos:    "Posted Videos",
+  likes:            "Likes",
+  comments:         "Comments",
+  shares:           "Shares",
+  engagement_rate:  "Engagement Rate",
+  active_accounts:  "Active Accounts",
 }
 
 export interface TopVideoRow {
@@ -313,6 +369,263 @@ export async function fetchChartData(
   return eachDayInRange(filters.dateFrom, filters.dateTo).map(
     (d) => byDate.get(d) ?? { date: d, views: 0, postedVideos: 0 },
   )
+}
+
+function aggregationBucketKey(dateStr: string, aggregation: ChartAggregation): string {
+  const d = new Date(`${dateStr}T12:00:00`)
+  if (aggregation === "day") return dateStr
+  if (aggregation === "week") {
+    return format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd")
+  }
+  return format(startOfMonth(d), "yyyy-MM-dd")
+}
+
+function formatMetricLabel(dateStr: string, aggregation: ChartAggregation): string {
+  const d = new Date(`${dateStr}T12:00:00`)
+  if (aggregation === "month") {
+    return d.toLocaleDateString("en-US", { month: "short", year: "numeric" })
+  }
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+}
+
+function toCumulative(points: MetricDataPoint[]): MetricDataPoint[] {
+  let running = 0
+  return points.map((p) => {
+    running += p.value
+    return { date: p.date, value: running }
+  })
+}
+
+export async function fetchDailyMetricBuckets(
+  filters: AnalyticsFilters,
+  accountIds: string[],
+): Promise<DailyMetricBucket[]> {
+  const internal = await fetchInternalDailyMetricBuckets(filters, accountIds)
+  return internal.map(toPublicMetricBucket)
+}
+
+async function fetchInternalDailyMetricBuckets(
+  filters: AnalyticsFilters,
+  accountIds: string[],
+): Promise<InternalDailyBucket[]> {
+  const ids = filters.accountIds.length ? filters.accountIds : accountIds
+  const days = eachDayInRange(filters.dateFrom, filters.dateTo)
+  if (!ids.length) {
+    return days.map((d) => ({
+      date: d, views: 0, posted_videos: 0, likes: 0, comments: 0,
+      shares: 0, active_accounts: 0, engagement_rate: 0,
+      accountIds: new Set<string>(), engagementSum: 0, engagementCount: 0,
+    }))
+  }
+
+  const videos = await fetchVideosInRange(
+    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
+  )
+  const allowedVideoIds = new Set(videos.map((v) => v.id))
+
+  const bucketMap = new Map<string, InternalDailyBucket>()
+  for (const d of days) {
+    bucketMap.set(d, {
+      date: d, views: 0, posted_videos: 0, likes: 0, comments: 0, shares: 0,
+      active_accounts: 0, engagement_rate: 0, accountIds: new Set(), engagementSum: 0, engagementCount: 0,
+    })
+  }
+
+  for (const v of videos) {
+    if (!v.posted_at) continue
+    const d = v.posted_at.slice(0, 10)
+    const b = bucketMap.get(d)
+    if (!b) continue
+    b.posted_videos += 1
+    b.likes += v.likes
+    b.comments += v.comments
+    b.shares += v.shares
+    b.accountIds.add(v.account_id)
+    b.engagementSum += v.engagement_rate
+    b.engagementCount += 1
+  }
+
+  const { data: stats, error } = await supabase
+    .from("video_daily_stats")
+    .select("date, views, video_id, tracked_videos!inner(account_id, platform, duration_seconds)")
+    .in("tracked_videos.account_id", ids)
+    .gte("date", filters.dateFrom)
+    .lte("date", filters.dateTo)
+
+  if (error) throw new Error(error.message)
+
+  interface StatRow {
+    date: string
+    views: number
+    video_id: string
+    tracked_videos: { account_id: string; platform: Platform; duration_seconds: number | null }
+  }
+
+  let hasStats = false
+  for (const row of (stats ?? []) as unknown as StatRow[]) {
+    if (filters.contentType !== "all" && !allowedVideoIds.has(row.video_id)) continue
+    if (filters.platforms.length && !filters.platforms.includes(row.tracked_videos.platform)) continue
+    const b = bucketMap.get(row.date)
+    if (!b) continue
+    hasStats = true
+    b.views += row.views ?? 0
+  }
+
+  if (!hasStats) {
+    for (const v of videos) {
+      if (!v.posted_at) continue
+      const b = bucketMap.get(v.posted_at.slice(0, 10))
+      if (b) b.views += v.views ?? 0
+    }
+  }
+
+  return days.map((d) => bucketMap.get(d)!)
+}
+
+function toPublicMetricBucket(b: InternalDailyBucket): DailyMetricBucket {
+  return {
+    date: b.date,
+    views: b.views,
+    posted_videos: b.posted_videos,
+    likes: b.likes,
+    comments: b.comments,
+    shares: b.shares,
+    active_accounts: b.accountIds.size,
+    engagement_rate: b.engagementCount
+      ? Math.round((b.engagementSum / b.engagementCount) * 100) / 100
+      : 0,
+  }
+}
+
+function internalMetricValue(b: InternalDailyBucket, metric: ChartMetricId): number {
+  if (metric === "active_accounts") return b.accountIds.size
+  if (metric === "engagement_rate") {
+    return b.engagementCount
+      ? Math.round((b.engagementSum / b.engagementCount) * 100) / 100
+      : 0
+  }
+  return b[metric]
+}
+
+export function aggregateMetricSeries(
+  buckets: DailyMetricBucket[],
+  metric: ChartMetricId,
+  aggregation: ChartAggregation,
+  mode: ChartMode,
+): MetricDataPoint[] {
+  // Public buckets only support day-level aggregation accurately for active_accounts
+  return aggregateInternalMetricSeries(
+    buckets.map((b) => ({
+      ...b,
+      accountIds: new Set<string>(),
+      engagementSum: b.engagement_rate,
+      engagementCount: b.engagement_rate > 0 ? 1 : 0,
+    })),
+    metric,
+    aggregation,
+    mode,
+  )
+}
+
+function aggregateInternalMetricSeries(
+  buckets: InternalDailyBucket[],
+  metric: ChartMetricId,
+  aggregation: ChartAggregation,
+  mode: ChartMode,
+): MetricDataPoint[] {
+  if (aggregation === "day") {
+    const points = buckets.map((b) => ({
+      date: b.date,
+      value: internalMetricValue(b, metric),
+    }))
+    return mode === "cumulative" ? toCumulative(points) : points
+  }
+
+  interface GroupAcc {
+    sum: number
+    engagementSum: number
+    engagementCount: number
+    accountIds: Set<string>
+  }
+
+  const grouped = new Map<string, GroupAcc>()
+  const orderedKeys: string[] = []
+
+  for (const b of buckets) {
+    const key = aggregationBucketKey(b.date, aggregation)
+    if (!grouped.has(key)) {
+      grouped.set(key, { sum: 0, engagementSum: 0, engagementCount: 0, accountIds: new Set() })
+      orderedKeys.push(key)
+    }
+    const g = grouped.get(key)!
+    if (metric === "active_accounts") {
+      for (const id of Array.from(b.accountIds)) g.accountIds.add(id)
+    } else if (metric === "engagement_rate") {
+      g.engagementSum += b.engagementSum
+      g.engagementCount += b.engagementCount
+    } else {
+      g.sum += b[metric]
+    }
+  }
+
+  const points: MetricDataPoint[] = orderedKeys.map((key) => {
+    const g = grouped.get(key)!
+    let value = g.sum
+    if (metric === "active_accounts") value = g.accountIds.size
+    if (metric === "engagement_rate") {
+      value = g.engagementCount
+        ? Math.round((g.engagementSum / g.engagementCount) * 100) / 100
+        : 0
+    }
+    return { date: key, value }
+  })
+
+  return mode === "cumulative" ? toCumulative(points) : points
+}
+
+export async function fetchMetricData(
+  filters: AnalyticsFilters,
+  accountIds: string[],
+  metric: ChartMetricId,
+  aggregation: ChartAggregation,
+  mode: ChartMode = "discrete",
+): Promise<MetricDataPoint[]> {
+  const buckets = await fetchInternalDailyMetricBuckets(filters, accountIds)
+  return aggregateInternalMetricSeries(buckets, metric, aggregation, mode)
+}
+
+export async function buildCombinedChartRows(
+  filters: AnalyticsFilters,
+  accountIds: string[],
+  metrics: ChartMetricId[],
+  aggregation: ChartAggregation,
+  mode: ChartMode,
+): Promise<Array<{ date: string; label: string } & Partial<Record<ChartMetricId, number>>>> {
+  const buckets = await fetchInternalDailyMetricBuckets(filters, accountIds)
+  const dateKeys = new Set<string>()
+  const seriesByMetric = new Map<ChartMetricId, Map<string, number>>()
+
+  for (const metric of metrics) {
+    const series = aggregateInternalMetricSeries(buckets, metric, aggregation, mode)
+    const map = new Map<string, number>()
+    for (const p of series) {
+      map.set(p.date, p.value)
+      dateKeys.add(p.date)
+    }
+    seriesByMetric.set(metric, map)
+  }
+
+  const sortedDates = Array.from(dateKeys).sort()
+  return sortedDates.map((date) => {
+    const row: { date: string; label: string } & Partial<Record<ChartMetricId, number>> = {
+      date,
+      label: formatMetricLabel(date, aggregation),
+    }
+    for (const metric of metrics) {
+      row[metric] = seriesByMetric.get(metric)?.get(date) ?? 0
+    }
+    return row
+  })
 }
 
 export async function fetchTopVideos(
