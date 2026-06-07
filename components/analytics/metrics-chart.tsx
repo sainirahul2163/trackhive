@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { formatNumber } from "@/lib/platform"
 import {
-  buildCombinedChartRows,
+  buildCombinedChartData,
   METRIC_CHART_COLORS,
   METRIC_CHART_LABELS,
   type AnalyticsFilters,
@@ -18,6 +18,7 @@ import {
   type ChartAggregation,
   type ChartMode,
   type ChartStyle,
+  type CombinedChartRow,
 } from "@/lib/analytics-queries"
 
 const STORAGE_KEY = "trackhive-metrics-chart-v1"
@@ -48,7 +49,7 @@ const ADDABLE_METRICS: { id: ChartMetricId; category: "account" | "video" }[] = 
   { id: "posted_videos", category: "video" },
 ]
 
-type ChartRow = { date: string; label: string } & Partial<Record<ChartMetricId, number>>
+type ChartRow = CombinedChartRow
 
 interface MetricsChartProps {
   filters: AnalyticsFilters
@@ -172,7 +173,7 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    buildCombinedChartRows(
+    buildCombinedChartData(
       filters,
       accountIds,
       settings.activeMetrics,
@@ -228,7 +229,19 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
 
   const leftMetrics = settings.activeMetrics.filter((m) => m !== "posted_videos")
   const hasRightAxis = settings.activeMetrics.includes("posted_videos")
-  const hasLeftAxis = leftMetrics.length > 0
+
+  const leftDomain = useMemo((): [number, number] => {
+    if (!chartData.length || !leftMetrics.length) return [0, 10]
+    if (leftMetrics.includes("views")) {
+      const maxViews = Math.max(...chartData.map((r) => Number(r.views ?? 0)))
+      return maxViews > 0 ? [0, Math.ceil(maxViews * 1.1)] : [0, 10]
+    }
+    const max = Math.max(
+      ...chartData.flatMap((r) => leftMetrics.map((m) => Number(r[m] ?? 0))),
+      0,
+    )
+    return max > 0 ? [0, Math.ceil(max * 1.1)] : [0, 10]
+  }, [chartData, leftMetrics])
 
   function renderLeftMetric(metric: ChartMetricId) {
     const color = METRIC_CHART_COLORS[metric]
@@ -238,13 +251,14 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
       yAxisId: "left" as const,
       isAnimationActive: true,
       animationDuration: 400,
+      connectNulls: true,
     }
     if (settings.style === "bar") {
       return (
         <Bar
           {...common}
           fill={color}
-          barSize={10}
+          barSize={8}
           radius={[2, 2, 0, 0]}
           fillOpacity={0.85}
         />
@@ -258,6 +272,7 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
           stroke={color}
           strokeWidth={2}
           dot={false}
+          activeDot={{ r: 4, fill: color }}
         />
       )
     }
@@ -268,7 +283,8 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
         stroke={color}
         strokeWidth={2}
         fill={color}
-        fillOpacity={0.15}
+        fillOpacity={0.12}
+        activeDot={{ r: 4, fill: color }}
       />
     )
   }
@@ -426,7 +442,7 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -434,26 +450,25 @@ export function MetricsChart({ filters, accountIds }: MetricsChartProps) {
                   axisLine={false}
                   tickLine={false}
                 />
-                {hasLeftAxis && (
-                  <YAxis
-                    yAxisId="left"
-                    tick={{ fill: "#71717a", fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                    tickFormatter={(v: number) => formatNumber(v)}
-                  />
-                )}
-                {hasRightAxis && (
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    tick={{ fill: "#71717a", fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={36}
-                  />
-                )}
+                <YAxis
+                  yAxisId="left"
+                  domain={leftDomain}
+                  tick={{ fill: "#71717a", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={48}
+                  tickFormatter={(v: number) => formatNumber(v)}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={[0, 10]}
+                  allowDecimals={false}
+                  tick={{ fill: "#71717a", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={28}
+                />
                 <Tooltip content={<ChartTooltip />} />
                 {leftMetrics.map((m) => renderLeftMetric(m))}
                 {hasRightAxis && (

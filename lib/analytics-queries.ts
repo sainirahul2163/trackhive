@@ -388,6 +388,20 @@ function formatMetricLabel(dateStr: string, aggregation: ChartAggregation): stri
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
+function allAggregationKeys(
+  dateFrom: string,
+  dateTo: string,
+  aggregation: ChartAggregation,
+): string[] {
+  const days = eachDayInRange(dateFrom, dateTo)
+  if (aggregation === "day") return days
+  const keys = new Set<string>()
+  for (const d of days) keys.add(aggregationBucketKey(d, aggregation))
+  return Array.from(keys).sort()
+}
+
+export type CombinedChartRow = { date: string; label: string } & Partial<Record<ChartMetricId, number>>
+
 function toCumulative(points: MetricDataPoint[]): MetricDataPoint[] {
   let running = 0
   return points.map((p) => {
@@ -461,21 +475,27 @@ async function fetchInternalDailyMetricBuckets(
     tracked_videos: { account_id: string; platform: Platform; duration_seconds: number | null }
   }
 
-  let hasStats = false
+  const dailyViewsByDate = new Map<string, number>()
   for (const row of (stats ?? []) as unknown as StatRow[]) {
     if (filters.contentType !== "all" && !allowedVideoIds.has(row.video_id)) continue
     if (filters.platforms.length && !filters.platforms.includes(row.tracked_videos.platform)) continue
-    const b = bucketMap.get(row.date)
-    if (!b) continue
-    hasStats = true
-    b.views += row.views ?? 0
+    dailyViewsByDate.set(row.date, (dailyViewsByDate.get(row.date) ?? 0) + (row.views ?? 0))
   }
 
-  if (!hasStats) {
-    for (const v of videos) {
-      if (!v.posted_at) continue
-      const b = bucketMap.get(v.posted_at.slice(0, 10))
-      if (b) b.views += v.views ?? 0
+  const postedAtViewsByDate = new Map<string, number>()
+  for (const v of videos) {
+    if (!v.posted_at) continue
+    const d = v.posted_at.slice(0, 10)
+    postedAtViewsByDate.set(d, (postedAtViewsByDate.get(d) ?? 0) + (v.views ?? 0))
+  }
+
+  // Merge views: daily_stats per date takes priority; fallback to posted_at views
+  for (const d of days) {
+    const b = bucketMap.get(d)!
+    if (dailyViewsByDate.has(d)) {
+      b.views = dailyViewsByDate.get(d)!
+    } else {
+      b.views = postedAtViewsByDate.get(d) ?? 0
     }
   }
 
@@ -594,30 +614,27 @@ export async function fetchMetricData(
   return aggregateInternalMetricSeries(buckets, metric, aggregation, mode)
 }
 
-export async function buildCombinedChartRows(
+export async function buildCombinedChartData(
   filters: AnalyticsFilters,
   accountIds: string[],
   metrics: ChartMetricId[],
   aggregation: ChartAggregation,
   mode: ChartMode,
-): Promise<Array<{ date: string; label: string } & Partial<Record<ChartMetricId, number>>>> {
+): Promise<CombinedChartRow[]> {
+  if (!metrics.length) return []
+
   const buckets = await fetchInternalDailyMetricBuckets(filters, accountIds)
-  const dateKeys = new Set<string>()
   const seriesByMetric = new Map<ChartMetricId, Map<string, number>>()
 
   for (const metric of metrics) {
     const series = aggregateInternalMetricSeries(buckets, metric, aggregation, mode)
-    const map = new Map<string, number>()
-    for (const p of series) {
-      map.set(p.date, p.value)
-      dateKeys.add(p.date)
-    }
-    seriesByMetric.set(metric, map)
+    seriesByMetric.set(metric, new Map(series.map((p) => [p.date, p.value])))
   }
 
-  const sortedDates = Array.from(dateKeys).sort()
-  return sortedDates.map((date) => {
-    const row: { date: string; label: string } & Partial<Record<ChartMetricId, number>> = {
+  const allDates = allAggregationKeys(filters.dateFrom, filters.dateTo, aggregation)
+
+  return allDates.map((date) => {
+    const row: CombinedChartRow = {
       date,
       label: formatMetricLabel(date, aggregation),
     }
@@ -626,6 +643,17 @@ export async function buildCombinedChartRows(
     }
     return row
   })
+}
+
+/** @deprecated Use buildCombinedChartData */
+export async function buildCombinedChartRows(
+  filters: AnalyticsFilters,
+  accountIds: string[],
+  metrics: ChartMetricId[],
+  aggregation: ChartAggregation,
+  mode: ChartMode,
+): Promise<CombinedChartRow[]> {
+  return buildCombinedChartData(filters, accountIds, metrics, aggregation, mode)
 }
 
 export async function fetchTopVideos(
