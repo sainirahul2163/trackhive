@@ -21,7 +21,7 @@ import {
   type CombinedChartRow,
 } from "@/lib/analytics-queries"
 
-const STORAGE_KEY = "trackhive-metrics-chart-v1"
+const STORAGE_KEY = "trackhive-metrics-chart-v2"
 
 const DEFAULT_METRICS: ChartMetricId[] = ["views", "posted_videos"]
 

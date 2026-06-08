@@ -97,35 +97,47 @@ export async function fetchDailyStats(accountId: string, days = 30): Promise<Dai
   since.setUTCDate(since.getUTCDate() - days)
   const sinceStr = since.toISOString().slice(0, 10)
 
-  const { data, error } = await supabase
-    .from("video_daily_stats")
-    .select("date, views, likes, comments, shares, tracked_videos!inner(account_id)")
-    .eq("tracked_videos.account_id", accountId)
-    .gte("date", sinceStr)
-    .order("date", { ascending: true })
-    .limit(1000)
-
-  if (error) throw new Error(error.message)
-
   const byDate = new Map<string, DailyViewsPoint>()
-  for (const row of (data ?? []) as (DailyViewsPoint & { tracked_videos: unknown })[]) {
-    const dateKey = normalizeDateKey(row.date)
-    const existing = byDate.get(dateKey)
-    if (existing) {
-      existing.views    += Number(row.views    ?? 0)
-      existing.likes    += Number(row.likes    ?? 0)
-      existing.comments += Number(row.comments ?? 0)
-      existing.shares   += Number(row.shares   ?? 0)
-    } else {
-      byDate.set(dateKey, {
-        date:     dateKey,
-        views:    Number(row.views    ?? 0),
-        likes:    Number(row.likes    ?? 0),
-        comments: Number(row.comments ?? 0),
-        shares:   Number(row.shares   ?? 0),
-      })
+  const pageSize = 1000
+  let offset = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("video_daily_stats")
+      .select("date, views, likes, comments, shares, tracked_videos!inner(account_id)")
+      .eq("tracked_videos.account_id", accountId)
+      .gte("date", sinceStr)
+      .order("date", { ascending: true })
+      .range(offset, offset + pageSize - 1)
+
+    if (error) throw new Error(error.message)
+
+    const rows = (data ?? []) as (DailyViewsPoint & { tracked_videos: unknown })[]
+    if (!rows.length) break
+
+    for (const row of rows) {
+      const dateKey = normalizeDateKey(row.date)
+      const existing = byDate.get(dateKey)
+      if (existing) {
+        existing.views    += Number(row.views    ?? 0)
+        existing.likes    += Number(row.likes    ?? 0)
+        existing.comments += Number(row.comments ?? 0)
+        existing.shares   += Number(row.shares   ?? 0)
+      } else {
+        byDate.set(dateKey, {
+          date:     dateKey,
+          views:    Number(row.views    ?? 0),
+          likes:    Number(row.likes    ?? 0),
+          comments: Number(row.comments ?? 0),
+          shares:   Number(row.shares   ?? 0),
+        })
+      }
     }
+
+    if (rows.length < pageSize) break
+    offset += pageSize
   }
+
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
 }
 
@@ -149,9 +161,20 @@ export interface SmartChartResult {
   isEmpty: boolean
 }
 
+function resolveSmartChartViews(
+  date: string,
+  firstSyncDate: string | null,
+  dailyByDate: Map<string, number>,
+  postedAtByDate: Map<string, number>,
+): number {
+  if (dailyByDate.has(date)) return dailyByDate.get(date)!
+  if (firstSyncDate && date >= firstSyncDate) return 0
+  return postedAtByDate.get(date) ?? 0
+}
+
 /**
- * Builds views chart data: posted_at spreads history; daily_stats apply on/after
- * the first snapshot date. Output is cumulative for a smooth growth curve.
+ * Builds views chart data: daily_stats when available; posted_at fallback
+ * only for pre-sync dates without stats. Output is cumulative for smooth curve.
  */
 export function buildSmartChartData(
   dailyStats: DailyViewsPoint[],
@@ -191,7 +214,7 @@ export function buildSmartChartData(
     postedAtByDate.set(dateKey, (postedAtByDate.get(dateKey) ?? 0) + Number(video.views ?? 0))
   }
 
-  const earliestStatsDate =
+  const firstSyncDate =
     dailyStats.length > 0
       ? dailyStats.map((s) => normalizeDateKey(s.date)).sort()[0]
       : null
@@ -201,17 +224,11 @@ export function buildSmartChartData(
   const discretePoints: SmartChartPoint[] = []
 
   for (const dateKey of dayKeys) {
-    const useDailyStats = earliestStatsDate !== null && dateKey >= earliestStatsDate
-
-    if (useDailyStats) {
-      const views = dailyByDate.get(dateKey) ?? 0
-      if (dailyByDate.has(dateKey)) usedDaily = true
-      discretePoints.push({ date: dateKey, views })
-    } else {
-      const views = postedAtByDate.get(dateKey) ?? 0
-      if (postedAtByDate.has(dateKey)) usedProxy = true
-      discretePoints.push({ date: dateKey, views })
-    }
+    const views = resolveSmartChartViews(dateKey, firstSyncDate, dailyByDate, postedAtByDate)
+    if (dailyByDate.has(dateKey)) usedDaily = true
+    else if (firstSyncDate && dateKey >= firstSyncDate) usedDaily = true
+    else if (postedAtByDate.has(dateKey)) usedProxy = true
+    discretePoints.push({ date: dateKey, views })
   }
 
   let running = 0
