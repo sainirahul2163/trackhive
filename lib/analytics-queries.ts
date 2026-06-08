@@ -245,7 +245,7 @@ async function fetchPostedAtViewsByDate(
 
   if (platforms.length) query = query.in("platform", platforms)
 
-  const { data, error } = await query
+  const { data, error } = await query.limit(1000)
   if (error) throw new Error(error.message)
 
   interface PostedAtRow {
@@ -288,7 +288,7 @@ async function fetchVideosInRange(
 
   if (platforms.length) query = query.in("platform", platforms)
 
-  const { data, error } = await query
+  const { data, error } = await query.limit(1000)
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as TrackedVideo[]
   return contentType === "all" ? rows : rows.filter((v) => matchesContentType(v, contentType))
