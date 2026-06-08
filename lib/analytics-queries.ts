@@ -229,12 +229,6 @@ async function fetchPostedAtViewsByDate(
 
   const { start, end } = utcDateBounds(dateFrom, dateTo)
 
-  console.log("[Views Query]", {
-    startDate: start.toISOString(),
-    endDate: end.toISOString(),
-    accountIds,
-  })
-
   let query = supabase
     .from("tracked_videos")
     .select("posted_at, views, platform, duration_seconds")
@@ -256,7 +250,6 @@ async function fetchPostedAtViewsByDate(
   }
 
   const rows = (data ?? []) as PostedAtRow[]
-  console.log("[Views Result]", rows.slice(0, 5))
 
   const grouped = new Map<string, number>()
   for (const row of rows) {

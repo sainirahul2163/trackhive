@@ -1,4 +1,4 @@
-import { addDays, format, subDays } from "date-fns"
+import { format, subDays } from "date-fns"
 import { supabase } from "@/lib/supabase"
 import type { TrackedAccount, TrackedVideo } from "@/types"
 
@@ -35,6 +35,7 @@ export async function fetchTrackedVideos(accountId: string): Promise<TrackedVide
     .select("*")
     .eq("account_id", accountId)
     .order("posted_at", { ascending: false })
+    .limit(1000)
 
   if (error) throw new Error(error.message)
   return data as TrackedVideo[]
@@ -76,9 +77,24 @@ export interface DailyViewsPoint {
   shares:   number
 }
 
+function normalizeDateKey(value: string): string {
+  return value.split("T")[0]
+}
+
+function eachDayInRange(dateFrom: string, dateTo: string): string[] {
+  const days: string[] = []
+  const cur = new Date(`${dateFrom}T00:00:00.000Z`)
+  const end = new Date(`${dateTo}T00:00:00.000Z`)
+  while (cur <= end) {
+    days.push(cur.toISOString().slice(0, 10))
+    cur.setUTCDate(cur.getUTCDate() + 1)
+  }
+  return days
+}
+
 export async function fetchDailyStats(accountId: string, days = 30): Promise<DailyViewsPoint[]> {
   const since = new Date()
-  since.setDate(since.getDate() - days)
+  since.setUTCDate(since.getUTCDate() - days)
   const sinceStr = since.toISOString().slice(0, 10)
 
   const { data, error } = await supabase
@@ -87,20 +103,22 @@ export async function fetchDailyStats(accountId: string, days = 30): Promise<Dai
     .eq("tracked_videos.account_id", accountId)
     .gte("date", sinceStr)
     .order("date", { ascending: true })
+    .limit(1000)
 
   if (error) throw new Error(error.message)
 
   const byDate = new Map<string, DailyViewsPoint>()
   for (const row of (data ?? []) as (DailyViewsPoint & { tracked_videos: unknown })[]) {
-    const existing = byDate.get(row.date)
+    const dateKey = normalizeDateKey(row.date)
+    const existing = byDate.get(dateKey)
     if (existing) {
       existing.views    += Number(row.views    ?? 0)
       existing.likes    += Number(row.likes    ?? 0)
       existing.comments += Number(row.comments ?? 0)
       existing.shares   += Number(row.shares   ?? 0)
     } else {
-      byDate.set(row.date, {
-        date:     row.date,
+      byDate.set(dateKey, {
+        date:     dateKey,
         views:    Number(row.views    ?? 0),
         likes:    Number(row.likes    ?? 0),
         comments: Number(row.comments ?? 0),
@@ -113,9 +131,9 @@ export async function fetchDailyStats(accountId: string, days = 30): Promise<Dai
 
 export function filterStatsByDays<T extends { date: string }>(points: T[], days: number): T[] {
   const since = new Date()
-  since.setDate(since.getDate() - days)
+  since.setUTCDate(since.getUTCDate() - days)
   const sinceStr = since.toISOString().slice(0, 10)
-  return points.filter((p) => p.date >= sinceStr)
+  return points.filter((p) => normalizeDateKey(p.date) >= sinceStr)
 }
 
 export type ViewsChartLabel = "Daily Views" | "Views by Post Date" | "Views History"
@@ -132,65 +150,75 @@ export interface SmartChartResult {
 }
 
 /**
- * Builds views chart data: posted_at spreads history; daily_stats apply only
- * after the first snapshot date to avoid first-sync spikes.
+ * Builds views chart data: posted_at spreads history; daily_stats apply on/after
+ * the first snapshot date. Output is cumulative for a smooth growth curve.
  */
 export function buildSmartChartData(
   dailyStats: DailyViewsPoint[],
   videos: TrackedVideo[],
   days: number,
 ): SmartChartResult {
-  const endDate = new Date()
-  const startDate = subDays(endDate, days)
-  const startStr = format(startDate, "yyyy-MM-dd")
-  const endStr = format(endDate, "yyyy-MM-dd")
+  const endStr = format(new Date(), "yyyy-MM-dd")
+  const startStr = format(subDays(new Date(), days), "yyyy-MM-dd")
+  const dayKeys = eachDayInRange(startStr, endStr)
 
-  const statsInRange = dailyStats.filter((s) => s.date >= startStr && s.date <= endStr)
-  const videosInRange = videos.filter((v) => {
+  const hasPostsInRange = videos.some((v) => {
     if (!v.posted_at) return false
-    const dateKey = format(new Date(v.posted_at), "yyyy-MM-dd")
+    const dateKey = normalizeDateKey(v.posted_at)
     return dateKey >= startStr && dateKey <= endStr
   })
 
-  if (statsInRange.length === 0 && videosInRange.length === 0) {
+  const statsInRange = dailyStats.filter((s) => {
+    const dateKey = normalizeDateKey(s.date)
+    return dateKey >= startStr && dateKey <= endStr
+  })
+
+  if (statsInRange.length === 0 && !hasPostsInRange) {
     return { points: [], label: "Daily Views", isEmpty: true }
   }
 
   const dailyByDate = new Map<string, number>()
-  for (const stat of statsInRange) {
-    dailyByDate.set(stat.date, (dailyByDate.get(stat.date) ?? 0) + stat.views)
+  for (const stat of dailyStats) {
+    const dateKey = normalizeDateKey(stat.date)
+    if (dateKey < startStr || dateKey > endStr) continue
+    dailyByDate.set(dateKey, (dailyByDate.get(dateKey) ?? 0) + stat.views)
   }
 
   const postedAtByDate = new Map<string, number>()
-  for (const video of videosInRange) {
-    const dateKey = format(new Date(video.posted_at!), "yyyy-MM-dd")
+  for (const video of videos) {
+    if (!video.posted_at) continue
+    const dateKey = normalizeDateKey(video.posted_at)
     postedAtByDate.set(dateKey, (postedAtByDate.get(dateKey) ?? 0) + Number(video.views ?? 0))
   }
 
   const earliestStatsDate =
-    statsInRange.length > 0
-      ? statsInRange.map((s) => s.date).sort()[0]
+    dailyStats.length > 0
+      ? dailyStats.map((s) => normalizeDateKey(s.date)).sort()[0]
       : null
 
   let usedDaily = false
   let usedProxy = false
-  const points: SmartChartPoint[] = []
-  let current = startDate
-  while (current <= endDate) {
-    const dateKey = format(current, "yyyy-MM-dd")
-    const useDailyStats = earliestStatsDate !== null && dateKey > earliestStatsDate
+  const discretePoints: SmartChartPoint[] = []
+
+  for (const dateKey of dayKeys) {
+    const useDailyStats = earliestStatsDate !== null && dateKey >= earliestStatsDate
 
     if (useDailyStats) {
       const views = dailyByDate.get(dateKey) ?? 0
       if (dailyByDate.has(dateKey)) usedDaily = true
-      points.push({ date: dateKey, views })
+      discretePoints.push({ date: dateKey, views })
     } else {
       const views = postedAtByDate.get(dateKey) ?? 0
       if (postedAtByDate.has(dateKey)) usedProxy = true
-      points.push({ date: dateKey, views })
+      discretePoints.push({ date: dateKey, views })
     }
-    current = addDays(current, 1)
   }
+
+  let running = 0
+  const points = discretePoints.map((p) => {
+    running += p.views
+    return { date: p.date, views: running }
+  })
 
   let label: ViewsChartLabel = "Views by Post Date"
   if (usedDaily && usedProxy) {
