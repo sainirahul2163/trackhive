@@ -396,6 +396,95 @@ function eachDayInRange(dateFrom: string, dateTo: string): string[] {
   return days
 }
 
+function groupSnapshotsByVideo(
+  rows: DailyStatRow[],
+  platforms: Platform[],
+  contentType: AnalyticsFilters["contentType"],
+): Map<string, Array<{ date: string; views: number }>> {
+  const byVideo = new Map<string, Map<string, number>>()
+
+  for (const row of rows) {
+    if (platforms.length && !platforms.includes(row.tracked_videos.platform)) continue
+    if (!matchesContentType(row.tracked_videos, contentType)) continue
+    const dateKey = normalizeDateKey(row.date)
+    const perDate = byVideo.get(row.video_id) ?? new Map<string, number>()
+    perDate.set(dateKey, Math.max(perDate.get(dateKey) ?? 0, row.views ?? 0))
+    byVideo.set(row.video_id, perDate)
+  }
+
+  const result = new Map<string, Array<{ date: string; views: number }>>()
+  for (const [videoId, perDate] of Array.from(byVideo.entries())) {
+    result.set(
+      videoId,
+      Array.from(perDate.entries()).map(([date, views]) => ({ date, views })),
+    )
+  }
+  return result
+}
+
+/** Views gained in [dateFrom, dateTo] using snapshot boundaries (not first-sync lifetime burst). */
+function computeVideoViewsGainedInPeriod(
+  snapshots: Array<{ date: string; views: number }>,
+  dateFrom: string,
+  dateTo: string,
+): number {
+  const upToEnd = snapshots.filter((s) => s.date <= dateTo)
+  if (!upToEnd.length) return 0
+
+  const sorted = [...upToEnd].sort((a, b) => a.date.localeCompare(b.date))
+  const endViews = sorted[sorted.length - 1].views
+
+  const beforePeriod = sorted.filter((s) => s.date < dateFrom)
+  if (beforePeriod.length > 0) {
+    const startViews = beforePeriod[beforePeriod.length - 1].views
+    return Math.max(0, endViews - startViews)
+  }
+
+  let total = 0
+  let prev = 0
+  for (const snap of sorted) {
+    if (snap.date < dateFrom) {
+      prev = snap.views
+      continue
+    }
+    if (snap.date > dateTo) break
+    total += Math.max(0, snap.views - prev)
+    prev = snap.views
+  }
+  return total
+}
+
+async function fetchDailyStatRowsUpTo(
+  accountIds: string[],
+  dateTo: string,
+): Promise<DailyStatRow[]> {
+  if (!accountIds.length) return []
+
+  const allRows: DailyStatRow[] = []
+  let offset = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("video_daily_stats")
+      .select("date, views, video_id, tracked_videos!inner(account_id, platform, duration_seconds)")
+      .in("tracked_videos.account_id", accountIds)
+      .lte("date", dateTo)
+      .order("date", { ascending: true })
+      .range(offset, offset + DAILY_STATS_PAGE_SIZE - 1)
+
+    if (error) throw new Error(error.message)
+
+    const rows = (data ?? []) as unknown as DailyStatRow[]
+    if (!rows.length) break
+    allRows.push(...rows)
+
+    if (rows.length < DAILY_STATS_PAGE_SIZE) break
+    offset += DAILY_STATS_PAGE_SIZE
+  }
+
+  return allRows
+}
+
 async function sumViewsFromDailyStats(
   ids: string[],
   dateFrom: string,
@@ -403,10 +492,15 @@ async function sumViewsFromDailyStats(
   platforms: Platform[],
   contentType: AnalyticsFilters["contentType"],
 ): Promise<{ total: number; hasStats: boolean }> {
-  const byDate = await fetchDailyViewsByDate(ids, dateFrom, dateTo, platforms, contentType)
+  const allRows = await fetchDailyStatRowsUpTo(ids, dateTo)
+  const byVideo = groupSnapshotsByVideo(allRows, platforms, contentType)
+
   let total = 0
-  for (const views of Array.from(byDate.values())) total += views
-  return { total, hasStats: byDate.size > 0 }
+  for (const snapshots of Array.from(byVideo.values())) {
+    total += computeVideoViewsGainedInPeriod(snapshots, dateFrom, dateTo)
+  }
+
+  return { total, hasStats: byVideo.size > 0 }
 }
 
 async function resolveViewsInRange(
@@ -415,13 +509,20 @@ async function resolveViewsInRange(
   dateTo: string,
   platforms: Platform[],
   contentType: AnalyticsFilters["contentType"],
-  videosInRange: TrackedVideo[],
 ): Promise<number> {
   const { total, hasStats } = await sumViewsFromDailyStats(
     ids, dateFrom, dateTo, platforms, contentType,
   )
   if (hasStats) return total
-  return videosInRange.reduce((s, v) => s + (v.views ?? 0), 0)
+
+  const postedAtByDate = await fetchPostedAtViewsByDate(
+    ids, dateFrom, dateTo, platforms, contentType,
+  )
+  let fallback = 0
+  for (const day of eachDayInRange(dateFrom, dateTo)) {
+    fallback += postedAtByDate.get(day) ?? 0
+  }
+  return fallback
 }
 
 export async function fetchOverviewMetrics(
@@ -432,7 +533,7 @@ export async function fetchOverviewMetrics(
   const videos = await fetchVideosInRange(ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType)
 
   const views = await resolveViewsInRange(
-    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType, videos,
+    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
   )
   const likes = videos.reduce((s, v) => s + v.likes, 0)
   const comments = videos.reduce((s, v) => s + v.comments, 0)
@@ -442,7 +543,7 @@ export async function fetchOverviewMetrics(
   const prev = previousPeriod(filters.dateFrom, filters.dateTo)
   const prevVideos = await fetchVideosInRange(ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType)
   const prevViews = await resolveViewsInRange(
-    ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType, prevVideos,
+    ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType,
   )
   const prevLikes = prevVideos.reduce((s, v) => s + v.likes, 0)
   const prevComments = prevVideos.reduce((s, v) => s + v.comments, 0)
