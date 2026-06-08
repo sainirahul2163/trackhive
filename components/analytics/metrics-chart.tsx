@@ -36,7 +36,7 @@ const DEFAULT_SETTINGS: ChartSettings = {
   activeMetrics: DEFAULT_METRICS,
   style: "area",
   aggregation: "day",
-  mode: "discrete",
+  mode: "cumulative",
 }
 
 const ADDABLE_METRICS: { id: ChartMetricId; category: "account" | "video" }[] = [
