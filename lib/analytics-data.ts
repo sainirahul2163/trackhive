@@ -81,6 +81,12 @@ function normalizeDateKey(value: string): string {
   return value.split("T")[0]
 }
 
+function dayBefore(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 function eachDayInRange(dateFrom: string, dateTo: string): string[] {
   const days: string[] = []
   const cur = new Date(`${dateFrom}T00:00:00.000Z`)
@@ -92,53 +98,106 @@ function eachDayInRange(dateFrom: string, dateTo: string): string[] {
   return days
 }
 
+interface RawDailyStatRow {
+  date: string
+  views: number
+  likes: number
+  comments: number
+  shares: number
+  video_id: string
+}
+
+function aggregateAccountDailyIncrements(
+  rows: RawDailyStatRow[],
+  sinceStr: string,
+): DailyViewsPoint[] {
+  const byVideo = new Map<string, Array<{ date: string; views: number; likes: number; comments: number; shares: number }>>()
+
+  for (const row of rows) {
+    const dateKey = normalizeDateKey(row.date)
+    const list = byVideo.get(row.video_id) ?? []
+    list.push({
+      date: dateKey,
+      views: Number(row.views ?? 0),
+      likes: Number(row.likes ?? 0),
+      comments: Number(row.comments ?? 0),
+      shares: Number(row.shares ?? 0),
+    })
+    byVideo.set(row.video_id, list)
+  }
+
+  const byDate = new Map<string, DailyViewsPoint>()
+
+  for (const entries of Array.from(byVideo.values())) {
+    entries.sort((a, b) => a.date.localeCompare(b.date))
+    let prevViews = 0
+    let prevLikes = 0
+    let prevComments = 0
+    let prevShares = 0
+
+    for (const entry of entries) {
+      const viewInc = Math.max(0, entry.views - prevViews)
+      const likeInc = Math.max(0, entry.likes - prevLikes)
+      const commentInc = Math.max(0, entry.comments - prevComments)
+      const shareInc = Math.max(0, entry.shares - prevShares)
+      prevViews = entry.views
+      prevLikes = entry.likes
+      prevComments = entry.comments
+      prevShares = entry.shares
+
+      if (entry.date < sinceStr) continue
+
+      const existing = byDate.get(entry.date)
+      if (existing) {
+        existing.views += viewInc
+        existing.likes += likeInc
+        existing.comments += commentInc
+        existing.shares += shareInc
+      } else {
+        byDate.set(entry.date, {
+          date: entry.date,
+          views: viewInc,
+          likes: likeInc,
+          comments: commentInc,
+          shares: shareInc,
+        })
+      }
+    }
+  }
+
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
+}
+
 export async function fetchDailyStats(accountId: string, days = 30): Promise<DailyViewsPoint[]> {
   const since = new Date()
   since.setUTCDate(since.getUTCDate() - days)
   const sinceStr = since.toISOString().slice(0, 10)
+  const fetchFrom = dayBefore(sinceStr)
 
-  const byDate = new Map<string, DailyViewsPoint>()
+  const allRows: RawDailyStatRow[] = []
   const pageSize = 1000
   let offset = 0
 
   while (true) {
     const { data, error } = await supabase
       .from("video_daily_stats")
-      .select("date, views, likes, comments, shares, tracked_videos!inner(account_id)")
+      .select("date, views, likes, comments, shares, video_id, tracked_videos!inner(account_id)")
       .eq("tracked_videos.account_id", accountId)
-      .gte("date", sinceStr)
+      .gte("date", fetchFrom)
       .order("date", { ascending: true })
       .range(offset, offset + pageSize - 1)
 
     if (error) throw new Error(error.message)
 
-    const rows = (data ?? []) as (DailyViewsPoint & { tracked_videos: unknown })[]
+    const rows = (data ?? []) as RawDailyStatRow[]
     if (!rows.length) break
-
-    for (const row of rows) {
-      const dateKey = normalizeDateKey(row.date)
-      const existing = byDate.get(dateKey)
-      if (existing) {
-        existing.views    += Number(row.views    ?? 0)
-        existing.likes    += Number(row.likes    ?? 0)
-        existing.comments += Number(row.comments ?? 0)
-        existing.shares   += Number(row.shares   ?? 0)
-      } else {
-        byDate.set(dateKey, {
-          date:     dateKey,
-          views:    Number(row.views    ?? 0),
-          likes:    Number(row.likes    ?? 0),
-          comments: Number(row.comments ?? 0),
-          shares:   Number(row.shares   ?? 0),
-        })
-      }
-    }
+    allRows.push(...rows)
 
     if (rows.length < pageSize) break
     offset += pageSize
   }
 
-  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
+  return aggregateAccountDailyIncrements(allRows, sinceStr)
 }
 
 export function filterStatsByDays<T extends { date: string }>(points: T[], days: number): T[] {

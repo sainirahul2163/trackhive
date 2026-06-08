@@ -234,6 +234,47 @@ interface DailyStatRow {
 
 const DAILY_STATS_PAGE_SIZE = 1000
 
+function dayBefore(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
+/** video_daily_stats.views stores cumulative totals at sync — convert to daily deltas. */
+function aggregateViewIncrementsByDate(
+  rows: DailyStatRow[],
+  dateFrom: string,
+  dateTo: string,
+  platforms: Platform[],
+  contentType: AnalyticsFilters["contentType"],
+): Map<string, number> {
+  const byVideo = new Map<string, Array<{ date: string; views: number }>>()
+
+  for (const row of rows) {
+    if (platforms.length && !platforms.includes(row.tracked_videos.platform)) continue
+    if (!matchesContentType(row.tracked_videos, contentType)) continue
+    const dateKey = normalizeDateKey(row.date)
+    const list = byVideo.get(row.video_id) ?? []
+    list.push({ date: dateKey, views: row.views ?? 0 })
+    byVideo.set(row.video_id, list)
+  }
+
+  const incrementsByDate = new Map<string, number>()
+  for (const entries of Array.from(byVideo.values())) {
+    entries.sort((a, b) => a.date.localeCompare(b.date))
+    let prevViews = 0
+    for (const entry of entries) {
+      const increment = Math.max(0, entry.views - prevViews)
+      prevViews = entry.views
+      if (entry.date >= dateFrom && entry.date <= dateTo) {
+        incrementsByDate.set(entry.date, (incrementsByDate.get(entry.date) ?? 0) + increment)
+      }
+    }
+  }
+
+  return incrementsByDate
+}
+
 async function fetchDailyViewsByDate(
   accountIds: string[],
   dateFrom: string,
@@ -241,16 +282,18 @@ async function fetchDailyViewsByDate(
   platforms: Platform[],
   contentType: AnalyticsFilters["contentType"],
 ): Promise<Map<string, number>> {
-  const dailyViewsByDate = new Map<string, number>()
-  if (!accountIds.length) return dailyViewsByDate
+  if (!accountIds.length) return new Map()
 
+  const fetchFrom = dayBefore(dateFrom)
+  const allRows: DailyStatRow[] = []
   let offset = 0
+
   while (true) {
     const { data, error } = await supabase
       .from("video_daily_stats")
       .select("date, views, video_id, tracked_videos!inner(account_id, platform, duration_seconds)")
       .in("tracked_videos.account_id", accountIds)
-      .gte("date", dateFrom)
+      .gte("date", fetchFrom)
       .lte("date", dateTo)
       .order("date", { ascending: true })
       .range(offset, offset + DAILY_STATS_PAGE_SIZE - 1)
@@ -259,19 +302,13 @@ async function fetchDailyViewsByDate(
 
     const rows = (data ?? []) as unknown as DailyStatRow[]
     if (!rows.length) break
-
-    for (const row of rows) {
-      if (platforms.length && !platforms.includes(row.tracked_videos.platform)) continue
-      if (!matchesContentType(row.tracked_videos, contentType)) continue
-      const dateKey = normalizeDateKey(row.date)
-      dailyViewsByDate.set(dateKey, (dailyViewsByDate.get(dateKey) ?? 0) + (row.views ?? 0))
-    }
+    allRows.push(...rows)
 
     if (rows.length < DAILY_STATS_PAGE_SIZE) break
     offset += DAILY_STATS_PAGE_SIZE
   }
 
-  return dailyViewsByDate
+  return aggregateViewIncrementsByDate(allRows, dateFrom, dateTo, platforms, contentType)
 }
 
 async function fetchPostedAtViewsByDate(
