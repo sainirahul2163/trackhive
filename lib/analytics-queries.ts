@@ -579,7 +579,7 @@ async function fetchInternalDailyMetricBuckets(
   }
 
   const postedAtViewsByDate = await fetchPostedAtViewsByDate(
-    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
+    ids, "2020-01-01", filters.dateTo, filters.platforms, filters.contentType,
   )
 
   const firstSyncDate = await fetchFirstSyncDate(ids)
