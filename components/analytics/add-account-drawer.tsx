@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, type MutableRefObject } from "react"
 import { X, Link2, CheckCircle2, Loader2, AlertCircle, Users, Video, Eye } from "lucide-react"
 import { toast, Toaster } from "sonner"
 import {
@@ -74,6 +74,18 @@ const TOAST_STYLE = {
 const FACEBOOK_ADD_SYNC_MESSAGE =
   "Facebook data can take 3–5 minutes to sync due to Meta's platform limitations. We'll update your dashboard automatically once it's ready."
 
+const DRAWER_CLOSE_DELAY_MS = 1800
+const FACEBOOK_TOAST_DELAY_MS = 7000
+/** Keeps total delay at 7s from scrape while firing only after the drawer has closed. */
+const FACEBOOK_TOAST_AFTER_CLOSE_MS = FACEBOOK_TOAST_DELAY_MS - DRAWER_CLOSE_DELAY_MS
+
+function clearFacebookToastTimer(ref: MutableRefObject<ReturnType<typeof setTimeout> | null>) {
+  if (ref.current) {
+    clearTimeout(ref.current)
+    ref.current = null
+  }
+}
+
 export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAccountDrawerProps) {
   const [urlInput, setUrlInput]   = useState("")
   const [detected, setDetected]   = useState<DetectedPlatform | null>(null)
@@ -84,9 +96,7 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
   const facebookToastRef          = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    return () => {
-      if (facebookToastRef.current) clearTimeout(facebookToastRef.current)
-    }
+    return () => clearFacebookToastTimer(facebookToastRef)
   }, [])
 
   function handleUrlChange(val: string) {
@@ -173,6 +183,8 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
 
       if (error) throw error
 
+      const isFacebook = detected.platform === "facebook"
+
       if (
         (detected.platform === "tiktok" ||
           detected.platform === "instagram" ||
@@ -186,14 +198,6 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
         }).catch(() => {
           // Initial scrape runs in background; user can manual-sync later
         })
-
-        if (detected.platform === "facebook") {
-          if (facebookToastRef.current) clearTimeout(facebookToastRef.current)
-          facebookToastRef.current = setTimeout(() => {
-            toast.info(FACEBOOK_ADD_SYNC_MESSAGE, { duration: 10000 })
-            facebookToastRef.current = null
-          }, 7000)
-        }
       }
 
       setStatus("success")
@@ -201,8 +205,16 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
 
       setTimeout(() => {
         onOpenChange(false)
-        reset()
-      }, 1800)
+        resetForm()
+
+        if (isFacebook) {
+          clearFacebookToastTimer(facebookToastRef)
+          facebookToastRef.current = setTimeout(() => {
+            toast.info(FACEBOOK_ADD_SYNC_MESSAGE, { duration: 10000 })
+            facebookToastRef.current = null
+          }, FACEBOOK_TOAST_AFTER_CLOSE_MS)
+        }
+      }, DRAWER_CLOSE_DELAY_MS)
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to add account."
       setErrorMsg(msg)
@@ -210,11 +222,7 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
     }
   }
 
-  function reset() {
-    if (facebookToastRef.current) {
-      clearTimeout(facebookToastRef.current)
-      facebookToastRef.current = null
-    }
+  function resetForm() {
     setUrlInput("")
     setDetected(null)
     setPreview(null)
@@ -223,8 +231,9 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
   }
 
   function handleClose() {
+    clearFacebookToastTimer(facebookToastRef)
     onOpenChange(false)
-    setTimeout(reset, 300)
+    setTimeout(resetForm, 300)
   }
 
   const cfg = detected ? PLATFORM_CONFIG[detected.platform] : null
@@ -232,8 +241,13 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
   const isBusy = status === "fetching" || status === "saving"
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-      <Toaster position="top-right" toastOptions={{ style: TOAST_STYLE }} />
+    <>
+      <Toaster
+        position="top-center"
+        style={{ zIndex: 100 }}
+        toastOptions={{ style: TOAST_STYLE }}
+      />
+      <Sheet open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
       <SheetContent
         side="right"
         showCloseButton={false}
@@ -462,5 +476,6 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
         </div>
       </SheetContent>
     </Sheet>
+    </>
   )
 }
