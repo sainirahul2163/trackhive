@@ -184,6 +184,7 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
       if (error) throw error
 
       const isFacebook = detected.platform === "facebook"
+      console.log("[add-account] platform on add:", detected.platform, { isFacebook })
 
       if (
         (detected.platform === "tiktok" ||
