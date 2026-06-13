@@ -95,11 +95,6 @@ export default function OnboardingStep2() {
     setPreview(null)
     setError(null)
 
-    if (result.platform === "facebook") {
-      setLoading(false)
-      return
-    }
-
     setLoading(true)
     debounceRef.current = setTimeout(async () => {
       try {
@@ -162,14 +157,16 @@ export default function OnboardingStep2() {
 
       if (
         data?.id &&
-        (detected.platform === "tiktok" || detected.platform === "instagram")
+        (detected.platform === "tiktok" ||
+          detected.platform === "instagram" ||
+          detected.platform === "facebook")
       ) {
         await fetch("/api/account/scrape", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ accountId: data.id }),
         })
-      } else if (data?.id && detected.platform !== "facebook") {
+      } else if (data?.id && detected.platform === "youtube") {
         await fetch("/api/sync", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
@@ -185,7 +182,7 @@ export default function OnboardingStep2() {
     }
   }
 
-  const canTrack = detected && (detected.platform === "facebook" || preview)
+  const canTrack = detected && preview
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
@@ -235,7 +232,7 @@ export default function OnboardingStep2() {
               </div>
             )}
 
-            {(preview || (detected && detected.platform === "facebook")) && !loading && (
+            {(preview || detected) && !loading && (
               <div style={{ borderRadius: "12px", border: "1px solid rgba(124,58,237,0.2)", backgroundColor: "rgba(124,58,237,0.06)", padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
                 <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "rgba(124,58,237,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                   {preview?.avatar_url ? (

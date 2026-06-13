@@ -102,12 +102,6 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
   }
 
   async function fetchPreview(d: DetectedPlatform) {
-    if (d.platform === "facebook") {
-      // Facebook not supported by EnsembleData tier — fallback to detected only
-      setStatus("detected")
-      return
-    }
-
     try {
       const res = await fetch(
         `/api/account/preview?platform=${d.platform}&username=${encodeURIComponent(d.username)}`
@@ -163,7 +157,9 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
       if (error) throw error
 
       if (
-        (detected.platform === "tiktok" || detected.platform === "instagram") &&
+        (detected.platform === "tiktok" ||
+          detected.platform === "instagram" ||
+          detected.platform === "facebook") &&
         data?.id
       ) {
         fetch("/api/account/scrape", {

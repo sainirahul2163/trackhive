@@ -3,6 +3,7 @@ import { createServerSupabase } from "@/lib/supabase-server"
 import { ScraperError } from "@/lib/scraper"
 import { syncTikTokFromScraper } from "@/lib/tiktok-sync"
 import { syncInstagramFromScraper } from "@/lib/instagram-sync"
+import { syncFacebookFromScraper } from "@/lib/facebook-sync"
 
 export async function POST(req: Request) {
   let accountId: string | null = null
@@ -29,9 +30,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 })
   }
 
-  if (account.platform !== "tiktok" && account.platform !== "instagram") {
+  const scraperPlatforms = ["tiktok", "instagram", "facebook"] as const
+  if (!scraperPlatforms.includes(account.platform as typeof scraperPlatforms[number])) {
     return NextResponse.json(
-      { error: "Scraper only supports TikTok and Instagram accounts" },
+      { error: "Scraper only supports TikTok, Instagram, and Facebook accounts" },
       { status: 400 },
     )
   }
@@ -49,7 +51,19 @@ export async function POST(req: Request) {
       })
     }
 
-    const result = await syncInstagramFromScraper(supabase, account, 30)
+    if (account.platform === "instagram") {
+      const result = await syncInstagramFromScraper(supabase, account, 30)
+
+      console.log(`[account/scrape] Scraped @${result.username}: ${result.reelsSaved} reels`)
+      return NextResponse.json({
+        success:        true,
+        username:       result.username,
+        videos_saved:   result.reelsSaved,
+        follower_count: result.followerCount,
+      })
+    }
+
+    const result = await syncFacebookFromScraper(supabase, account, 30)
 
     console.log(`[account/scrape] Scraped @${result.username}: ${result.reelsSaved} reels`)
     return NextResponse.json({

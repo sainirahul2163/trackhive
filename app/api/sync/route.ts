@@ -6,6 +6,7 @@ import { YouTubeApiError } from "@/lib/youtube"
 import { syncTikTokFromScraper } from "@/lib/tiktok-sync"
 import { syncInstagramFromScraper } from "@/lib/instagram-sync"
 import { syncYouTubeFromApi } from "@/lib/youtube-sync"
+import { syncFacebookFromScraper } from "@/lib/facebook-sync"
 
 
 interface TrackedAccountRow {
@@ -73,6 +74,8 @@ export async function POST(req: Request) {
         await syncInstagramFromScraper(supabase, account, 30)
       } else if (account.platform === "youtube") {
         await syncYouTubeFromApi(supabase, account, 30)
+      } else if (account.platform === "facebook") {
+        await syncFacebookFromScraper(supabase, account, 30)
       } else {
         result.skipped++
         continue

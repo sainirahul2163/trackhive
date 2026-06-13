@@ -3,18 +3,20 @@ import {
   scrapeTikTokProfile,
   scrapeInstagramProfile,
   scrapeInstagramReels,
+  scrapeFacebookProfile,
+  scrapeFacebookReels,
   ScraperError,
 } from "@/lib/scraper"
 import { getYouTubeChannel, YouTubeApiError } from "@/lib/youtube"
 
 export interface AccountPreview {
-  platform:         "tiktok" | "instagram" | "youtube"
+  platform:         "tiktok" | "instagram" | "youtube" | "facebook"
   username:         string
   display_name:     string
   avatar_url:       string
   follower_count:   number
   video_count:      number
-  /** Highest reel view count (Instagram only) */
+  /** Highest reel view count (Instagram/Facebook only) */
   top_reel_views?:  number
 }
 
@@ -66,6 +68,23 @@ export async function GET(req: Request) {
         avatar_url:     channel.avatar_url,
         follower_count: channel.subscriber_count,
         video_count:    channel.video_count,
+      }
+    } else if (platform === "facebook") {
+      const [profile, reels] = await Promise.all([
+        scrapeFacebookProfile(username),
+        scrapeFacebookReels(username, 20),
+      ])
+      const topReelViews = reels.length
+        ? Math.max(...reels.map((r) => r.views))
+        : 0
+      preview = {
+        platform:       "facebook",
+        username:       profile.username,
+        display_name:   profile.display_name,
+        avatar_url:     profile.avatar_url,
+        follower_count: profile.follower_count,
+        video_count:    reels.length || profile.post_count,
+        top_reel_views: topReelViews,
       }
     } else {
       return NextResponse.json({ error: "Unsupported platform" }, { status: 400 })

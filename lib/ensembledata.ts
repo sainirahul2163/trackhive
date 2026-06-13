@@ -6,7 +6,7 @@ export const PLATFORM_LIMITATIONS = {
   instagram: { views: true,   saves: false, shares: false },
   tiktok:    { views: true,   saves: false, shares: true  },
   youtube:   { views: true,   saves: false, shares: false },
-  facebook:  { views: false,  saves: false, shares: false },
+  facebook:  { views: true,   saves: false, shares: false },
 } as const
 
 export type PlatformId = keyof typeof PLATFORM_LIMITATIONS
