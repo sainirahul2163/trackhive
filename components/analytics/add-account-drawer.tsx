@@ -162,7 +162,10 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
 
       if (error) throw error
 
-      if (detected.platform === "tiktok" && data?.id) {
+      if (
+        (detected.platform === "tiktok" || detected.platform === "instagram") &&
+        data?.id
+      ) {
         fetch("/api/account/scrape", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },

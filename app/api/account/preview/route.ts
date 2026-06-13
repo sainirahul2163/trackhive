@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server"
 import {
-  getInstagramUserInfo,
   getYouTubeChannelInfo,
   resolveYouTubeChannelId,
-  fetchInstagramReelsApify,
   EnsembleDataError,
 } from "@/lib/ensembledata"
-import { scrapeTikTokProfile, ScraperError } from "@/lib/scraper"
+import {
+  scrapeTikTokProfile,
+  scrapeInstagramProfile,
+  scrapeInstagramReels,
+  ScraperError,
+} from "@/lib/scraper"
 
 export interface AccountPreview {
   platform:         "tiktok" | "instagram" | "youtube"
@@ -15,7 +18,7 @@ export interface AccountPreview {
   avatar_url:       string
   follower_count:   number
   video_count:      number
-  /** Highest reel view count from Apify (Instagram only) */
+  /** Highest reel view count (Instagram only) */
   top_reel_views?:  number
 }
 
@@ -42,20 +45,20 @@ export async function GET(req: Request) {
         video_count:    profile.video_count,
       }
     } else if (platform === "instagram") {
-      const [info, reels] = await Promise.all([
-        getInstagramUserInfo(username),
-        fetchInstagramReelsApify(username),
+      const [profile, reels] = await Promise.all([
+        scrapeInstagramProfile(username),
+        scrapeInstagramReels(username, 20),
       ])
       const topReelViews = reels.length
         ? Math.max(...reels.map((r) => r.views))
         : 0
       preview = {
         platform:       "instagram",
-        username:       info.username,
-        display_name:   info.full_name || info.username,
-        avatar_url:     info.avatar_url,
-        follower_count: info.follower_count,
-        video_count:    reels.length || info.post_count,
+        username:       profile.username,
+        display_name:   profile.display_name,
+        avatar_url:     profile.avatar_url,
+        follower_count: profile.follower_count,
+        video_count:    reels.length || profile.post_count,
         top_reel_views: topReelViews,
       }
     } else if (platform === "youtube") {

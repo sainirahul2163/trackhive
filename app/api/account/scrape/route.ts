@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createServerSupabase } from "@/lib/supabase-server"
 import { ScraperError } from "@/lib/scraper"
 import { syncTikTokFromScraper } from "@/lib/tiktok-sync"
+import { syncInstagramFromScraper } from "@/lib/instagram-sync"
 
 export async function POST(req: Request) {
   let accountId: string | null = null
@@ -28,18 +29,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 })
   }
 
-  if (account.platform !== "tiktok") {
-    return NextResponse.json({ error: "Scraper only supports TikTok accounts" }, { status: 400 })
+  if (account.platform !== "tiktok" && account.platform !== "instagram") {
+    return NextResponse.json(
+      { error: "Scraper only supports TikTok and Instagram accounts" },
+      { status: 400 },
+    )
   }
 
   try {
-    const result = await syncTikTokFromScraper(supabase, account, 30)
+    if (account.platform === "tiktok") {
+      const result = await syncTikTokFromScraper(supabase, account, 30)
 
-    console.log(`[account/scrape] Scraped @${result.username}: ${result.videosSaved} videos`)
+      console.log(`[account/scrape] Scraped @${result.username}: ${result.videosSaved} videos`)
+      return NextResponse.json({
+        success:        true,
+        username:       result.username,
+        videos_saved:   result.videosSaved,
+        follower_count: result.followerCount,
+      })
+    }
+
+    const result = await syncInstagramFromScraper(supabase, account, 30)
+
+    console.log(`[account/scrape] Scraped @${result.username}: ${result.reelsSaved} reels`)
     return NextResponse.json({
       success:        true,
       username:       result.username,
-      videos_saved:   result.videosSaved,
+      videos_saved:   result.reelsSaved,
       follower_count: result.followerCount,
     })
   } catch (err) {
@@ -48,6 +64,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: err.message }, { status })
     }
     console.error("[account/scrape]", err)
-    return NextResponse.json({ error: "Failed to scrape TikTok account" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to scrape account" }, { status: 500 })
   }
 }
