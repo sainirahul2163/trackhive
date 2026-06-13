@@ -210,7 +210,12 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
 
         if (isFacebook) {
           clearFacebookToastTimer(facebookToastRef)
+          console.log("Facebook toast scheduled", {
+            delayMs: FACEBOOK_TOAST_AFTER_CLOSE_MS,
+            platform: detected.platform,
+          })
           facebookToastRef.current = setTimeout(() => {
+            console.log("Facebook toast firing")
             toast.info(FACEBOOK_ADD_SYNC_MESSAGE, { duration: 10000 })
             facebookToastRef.current = null
           }, FACEBOOK_TOAST_AFTER_CLOSE_MS)
