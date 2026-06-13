@@ -427,14 +427,18 @@ function computeVideoViewsGainedInPeriod(
   snapshots: Array<{ date: string; views: number }>,
   dateFrom: string,
   dateTo: string,
+  postDate?: string | null,
 ): number {
+  const rangeStart =
+    postDate && postDate > dateFrom ? postDate : dateFrom
+
   const upToEnd = snapshots.filter((s) => s.date <= dateTo)
   if (!upToEnd.length) return 0
 
   const sorted = [...upToEnd].sort((a, b) => a.date.localeCompare(b.date))
   const endViews = sorted[sorted.length - 1].views
 
-  const beforePeriod = sorted.filter((s) => s.date < dateFrom)
+  const beforePeriod = sorted.filter((s) => s.date < rangeStart)
   if (beforePeriod.length > 0) {
     const startViews = beforePeriod[beforePeriod.length - 1].views
     return Math.max(0, endViews - startViews)
@@ -443,7 +447,7 @@ function computeVideoViewsGainedInPeriod(
   let total = 0
   let prev = 0
   for (const snap of sorted) {
-    if (snap.date < dateFrom) {
+    if (snap.date < rangeStart) {
       prev = snap.views
       continue
     }
@@ -485,22 +489,31 @@ async function fetchDailyStatRowsUpTo(
   return allRows
 }
 
-async function sumViewsFromDailyStats(
+async function sumViewsForPostedVideos(
   ids: string[],
   dateFrom: string,
   dateTo: string,
   platforms: Platform[],
   contentType: AnalyticsFilters["contentType"],
-): Promise<{ total: number; hasStats: boolean }> {
+  postedVideos: TrackedVideo[],
+): Promise<number> {
+  if (!postedVideos.length) return 0
+
   const allRows = await fetchDailyStatRowsUpTo(ids, dateTo)
   const byVideo = groupSnapshotsByVideo(allRows, platforms, contentType)
 
   let total = 0
-  for (const snapshots of Array.from(byVideo.values())) {
-    total += computeVideoViewsGainedInPeriod(snapshots, dateFrom, dateTo)
+  for (const video of postedVideos) {
+    const postDate = video.posted_at ? normalizeDateKey(video.posted_at) : null
+    const snapshots = byVideo.get(video.id)
+    if (snapshots?.length) {
+      total += computeVideoViewsGainedInPeriod(snapshots, dateFrom, dateTo, postDate)
+    } else {
+      total += video.views ?? 0
+    }
   }
 
-  return { total, hasStats: byVideo.size > 0 }
+  return total
 }
 
 async function resolveViewsInRange(
@@ -509,20 +522,11 @@ async function resolveViewsInRange(
   dateTo: string,
   platforms: Platform[],
   contentType: AnalyticsFilters["contentType"],
+  postedVideos: TrackedVideo[],
 ): Promise<number> {
-  const { total, hasStats } = await sumViewsFromDailyStats(
-    ids, dateFrom, dateTo, platforms, contentType,
+  return sumViewsForPostedVideos(
+    ids, dateFrom, dateTo, platforms, contentType, postedVideos,
   )
-  if (hasStats) return total
-
-  const postedAtByDate = await fetchPostedAtViewsByDate(
-    ids, dateFrom, dateTo, platforms, contentType,
-  )
-  let fallback = 0
-  for (const day of eachDayInRange(dateFrom, dateTo)) {
-    fallback += postedAtByDate.get(day) ?? 0
-  }
-  return fallback
 }
 
 export async function fetchOverviewMetrics(
@@ -533,7 +537,7 @@ export async function fetchOverviewMetrics(
   const videos = await fetchVideosInRange(ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType)
 
   const views = await resolveViewsInRange(
-    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType,
+    ids, filters.dateFrom, filters.dateTo, filters.platforms, filters.contentType, videos,
   )
   const likes = videos.reduce((s, v) => s + v.likes, 0)
   const comments = videos.reduce((s, v) => s + v.comments, 0)
@@ -543,7 +547,7 @@ export async function fetchOverviewMetrics(
   const prev = previousPeriod(filters.dateFrom, filters.dateTo)
   const prevVideos = await fetchVideosInRange(ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType)
   const prevViews = await resolveViewsInRange(
-    ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType,
+    ids, prev.dateFrom, prev.dateTo, filters.platforms, filters.contentType, prevVideos,
   )
   const prevLikes = prevVideos.reduce((s, v) => s + v.likes, 0)
   const prevComments = prevVideos.reduce((s, v) => s + v.comments, 0)

@@ -162,6 +162,16 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
 
       if (error) throw error
 
+      if (detected.platform === "tiktok" && data?.id) {
+        fetch("/api/account/scrape", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ accountId: data.id }),
+        }).catch(() => {
+          // Initial scrape runs in background; user can manual-sync later
+        })
+      }
+
       setStatus("success")
       onAccountAdded(data as TrackedAccount)
 

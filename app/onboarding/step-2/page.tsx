@@ -160,7 +160,13 @@ export default function OnboardingStep2() {
 
       if (insertError) throw insertError
 
-      if (data?.id && detected.platform !== "facebook") {
+      if (data?.id && detected.platform === "tiktok") {
+        await fetch("/api/account/scrape", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ accountId: data.id }),
+        })
+      } else if (data?.id && detected.platform !== "facebook") {
         await fetch("/api/sync", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
