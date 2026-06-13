@@ -180,16 +180,60 @@ function getInstagramScraperUrl(): string {
 
 function getFacebookScraperUrl(): string {
   const url = process.env.FACEBOOK_SCRAPER_URL?.trim()
-  if (!url) throw new ScraperError(500, "FACEBOOK_SCRAPER_URL is not configured")
+  if (!url) throw new ScraperError(500, "Facebook scraper is temporarily unavailable")
   return url.replace(/\/$/, "")
+}
+
+/** Hide upstream infra/config errors from end users. */
+function sanitizeScraperError(message: string): string {
+  if (
+    /BRIGHTDATA/i.test(message) ||
+    /API_KEY is not set/i.test(message) ||
+    /(?:env(?:ironment)? variable|process\.env)/i.test(message)
+  ) {
+    return "Scraper service is temporarily unavailable. Please try again later."
+  }
+  return message
+}
+
+interface ScraperRequestContext {
+  service: string
+  url:     string
+  status:  number
+  body:    unknown
+}
+
+function throwScraperError(
+  status: number,
+  rawMessage?: string,
+  context?: Omit<ScraperRequestContext, "status"> & { status?: number },
+): never {
+  console.error("[scraper] Railway error:", {
+    service:  context?.service,
+    url:      context?.url,
+    status:   context?.status ?? status,
+    response: context?.body,
+    rawError: rawMessage,
+  })
+  if (rawMessage && /BRIGHTDATA/i.test(rawMessage)) {
+    console.error(
+      "[scraper] Railway Facebook scraper is missing BRIGHTDATA_API_KEY — set it on the FACEBOOK_SCRAPER_URL service",
+    )
+  }
+  const fallback = `Scraper request failed (${status})`
+  throw new ScraperError(status, sanitizeScraperError(rawMessage?.trim() || fallback))
 }
 
 async function scraperPost<T>(
   baseUrl: string,
   path: string,
   body: Record<string, unknown>,
+  service = "scraper",
 ): Promise<T> {
-  const res = await fetch(`${baseUrl}${path}`, {
+  const url = `${baseUrl}${path}`
+  console.log(`[scraper:${service}] POST ${url}`, body)
+
+  const res = await fetch(url, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
@@ -199,21 +243,22 @@ async function scraperPost<T>(
   try {
     json = (await res.json()) as typeof json
   } catch {
-    throw new ScraperError(res.status, `Scraper returned invalid JSON (${res.status})`)
+    throwScraperError(res.status, `Scraper returned invalid JSON (${res.status})`, {
+      service,
+      url,
+      body: "(invalid JSON)",
+    })
   }
 
   if (!res.ok || json.success === false || json.data == null) {
-    throw new ScraperError(
-      res.status,
-      json.error ?? `Scraper request failed (${res.status})`,
-    )
+    throwScraperError(res.status, json.error, { service, url, status: res.status, body: json })
   }
 
   return json.data
 }
 
 async function tiktokScrapePost<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  return scraperPost<T>(getTikTokScraperUrl(), path, body)
+  return scraperPost<T>(getTikTokScraperUrl(), path, body, "tiktok")
 }
 
 async function scraperList<T>(
@@ -222,8 +267,12 @@ async function scraperList<T>(
   body: Record<string, unknown>,
   allowEmpty = false,
   notFoundMessage = "Profile not found",
+  service = "scraper",
 ): Promise<T[]> {
-  const res = await fetch(`${baseUrl}${path}`, {
+  const url = `${baseUrl}${path}`
+  console.log(`[scraper:${service}] POST ${url}`, body)
+
+  const res = await fetch(url, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
@@ -233,14 +282,15 @@ async function scraperList<T>(
   try {
     json = (await res.json()) as typeof json
   } catch {
-    throw new ScraperError(res.status, `Scraper returned invalid JSON (${res.status})`)
+    throwScraperError(res.status, `Scraper returned invalid JSON (${res.status})`, {
+      service,
+      url,
+      body: "(invalid JSON)",
+    })
   }
 
   if (!res.ok || json.success === false) {
-    throw new ScraperError(
-      res.status,
-      json.error ?? `Scraper request failed (${res.status})`,
-    )
+    throwScraperError(res.status, json.error, { service, url, status: res.status, body: json })
   }
 
   const items = Array.isArray(json.data)
@@ -250,7 +300,7 @@ async function scraperList<T>(
       : []
 
   if (!allowEmpty && items.length === 0) {
-    throw new ScraperError(404, notFoundMessage)
+    throwScraperError(404, notFoundMessage, { service, url, status: 404, body: json })
   }
 
   return items
@@ -267,6 +317,7 @@ async function instagramScrapeList<T>(
     body,
     allowEmpty,
     "Instagram profile not found",
+    "instagram",
   )
 }
 
@@ -343,24 +394,35 @@ export async function scrapeTikTokVideos(
   limit = 30,
 ): Promise<TikTokVideoData[]> {
   const base = getTikTokScraperUrl()
-  const res = await fetch(`${base}/scrape/tiktok/videos`, {
+  const path = "/scrape/tiktok/videos"
+  const url = `${base}${path}`
+  const reqBody = { username, limit }
+  console.log(`[scraper:tiktok] POST ${url}`, reqBody)
+
+  const res = await fetch(url, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ username, limit }),
+    body:    JSON.stringify(reqBody),
   })
 
   let json: { success?: boolean; error?: string; data?: TikTokVideoData[] }
   try {
     json = (await res.json()) as typeof json
   } catch {
-    throw new ScraperError(res.status, `Scraper returned invalid JSON (${res.status})`)
+    throwScraperError(res.status, `Scraper returned invalid JSON (${res.status})`, {
+      service: "tiktok",
+      url,
+      body: "(invalid JSON)",
+    })
   }
 
   if (!res.ok || !json.success || !Array.isArray(json.data)) {
-    throw new ScraperError(
-      res.status,
-      json.error ?? `Scraper request failed (${res.status})`,
-    )
+    throwScraperError(res.status, json.error, {
+      service: "tiktok",
+      url,
+      status: res.status,
+      body: json,
+    })
   }
 
   return json.data
@@ -390,14 +452,13 @@ export async function scrapeInstagramReels(
 }
 
 export async function scrapeFacebookProfile(username: string): Promise<FacebookProfileData> {
-  const items = await scraperList<FacebookProfileRaw>(
+  const raw = await scraperPost<FacebookProfileRaw>(
     getFacebookScraperUrl(),
     "/scrape/facebook/profile",
     { username },
-    false,
-    "Facebook profile not found",
+    "facebook",
   )
-  return normalizeFacebookProfile(items[0])
+  return normalizeFacebookProfile(raw)
 }
 
 export async function scrapeFacebookReels(
@@ -405,24 +466,35 @@ export async function scrapeFacebookReels(
   limit = 30,
 ): Promise<FacebookReelData[]> {
   const base = getFacebookScraperUrl()
-  const res = await fetch(`${base}/scrape/facebook/reels`, {
+  const path = "/scrape/facebook/reels"
+  const url = `${base}${path}`
+  const reqBody = { username, limit }
+  console.log(`[scraper:facebook] POST ${url}`, reqBody)
+
+  const res = await fetch(url, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ username, limit }),
+    body:    JSON.stringify(reqBody),
   })
 
   let json: { success?: boolean; error?: string; data?: FacebookReelRaw[] }
   try {
     json = (await res.json()) as typeof json
   } catch {
-    throw new ScraperError(res.status, `Scraper returned invalid JSON (${res.status})`)
+    throwScraperError(res.status, `Scraper returned invalid JSON (${res.status})`, {
+      service: "facebook",
+      url,
+      body: "(invalid JSON)",
+    })
   }
 
   if (!res.ok || json.success === false) {
-    throw new ScraperError(
-      res.status,
-      json.error ?? `Scraper request failed (${res.status})`,
-    )
+    throwScraperError(res.status, json.error, {
+      service: "facebook",
+      url,
+      status: res.status,
+      body: json,
+    })
   }
 
   if (!Array.isArray(json.data)) return []

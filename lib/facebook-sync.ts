@@ -115,10 +115,14 @@ export async function syncFacebookFromScraper(
   account: { id: string; username: string },
   reelLimit = 30,
 ): Promise<{ username: string; reelsSaved: number; followerCount: number }> {
-  const [profile, reels] = await Promise.all([
-    scrapeFacebookProfile(account.username),
-    scrapeFacebookReels(account.username, reelLimit),
-  ])
+  const profile = await scrapeFacebookProfile(account.username)
+
+  let reels: Awaited<ReturnType<typeof scrapeFacebookReels>> = []
+  try {
+    reels = await scrapeFacebookReels(account.username, reelLimit)
+  } catch (reelsErr) {
+    console.error("[facebook-sync] reels fetch failed:", reelsErr)
+  }
 
   const totalViews = reels.reduce((s, r) => s + toNum(r.views), 0)
   const avgViews   = reels.length ? Math.round(totalViews / reels.length) : 0

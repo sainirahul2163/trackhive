@@ -70,10 +70,17 @@ export async function GET(req: Request) {
         video_count:    channel.video_count,
       }
     } else if (platform === "facebook") {
-      const [profile, reels] = await Promise.all([
-        scrapeFacebookProfile(username),
-        scrapeFacebookReels(username, 20),
-      ])
+      console.log("[account/preview] Facebook preview", {
+        username,
+        scraperUrl: process.env.FACEBOOK_SCRAPER_URL?.trim() || "(FACEBOOK_SCRAPER_URL not set)",
+      })
+      const profile = await scrapeFacebookProfile(username)
+      let reels: Awaited<ReturnType<typeof scrapeFacebookReels>> = []
+      try {
+        reels = await scrapeFacebookReels(username, 20)
+      } catch (reelsErr) {
+        console.error("[account/preview] Facebook reels fetch failed:", reelsErr)
+      }
       const topReelViews = reels.length
         ? Math.max(...reels.map((r) => r.views))
         : 0
@@ -93,6 +100,12 @@ export async function GET(req: Request) {
     return NextResponse.json(preview)
   } catch (err) {
     if (err instanceof ScraperError || err instanceof YouTubeApiError) {
+      console.error("[account/preview] scraper error:", {
+        platform,
+        username,
+        status: err.status,
+        message: err.message,
+      })
       const status = err.status === 404 ? 404 : 502
       return NextResponse.json({ error: err.message }, { status })
     }
