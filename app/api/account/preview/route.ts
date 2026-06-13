@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server"
 import {
-  getYouTubeChannelInfo,
-  resolveYouTubeChannelId,
-  EnsembleDataError,
-} from "@/lib/ensembledata"
-import {
   scrapeTikTokProfile,
   scrapeInstagramProfile,
   scrapeInstagramReels,
   ScraperError,
 } from "@/lib/scraper"
+import { getYouTubeChannel, YouTubeApiError } from "@/lib/youtube"
 
 export interface AccountPreview {
   platform:         "tiktok" | "instagram" | "youtube"
@@ -62,15 +58,14 @@ export async function GET(req: Request) {
         top_reel_views: topReelViews,
       }
     } else if (platform === "youtube") {
-      const channelId = await resolveYouTubeChannelId(username)
-      const info = await getYouTubeChannelInfo(channelId)
+      const channel = await getYouTubeChannel(username)
       preview = {
         platform:       "youtube",
-        username:       channelId,
-        display_name:   info.channel_name,
-        avatar_url:     info.avatar,
-        follower_count: info.subscriber_count,
-        video_count:    info.video_count,
+        username:       channel.channel_id,
+        display_name:   channel.display_name,
+        avatar_url:     channel.avatar_url,
+        follower_count: channel.subscriber_count,
+        video_count:    channel.video_count,
       }
     } else {
       return NextResponse.json({ error: "Unsupported platform" }, { status: 400 })
@@ -78,7 +73,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(preview)
   } catch (err) {
-    if (err instanceof ScraperError || err instanceof EnsembleDataError) {
+    if (err instanceof ScraperError || err instanceof YouTubeApiError) {
       const status = err.status === 404 ? 404 : 502
       return NextResponse.json({ error: err.message }, { status })
     }

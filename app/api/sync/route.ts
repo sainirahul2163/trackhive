@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server"
 import { createServerSupabase } from "@/lib/supabase-server"
-import {
-  getYouTubeChannelInfo,
-  resolveYouTubeChannelId,
-  EnsembleDataError,
-  PLATFORM_LIMITATIONS,
-} from "@/lib/ensembledata"
+import { PLATFORM_LIMITATIONS } from "@/lib/ensembledata"
 import { ScraperError } from "@/lib/scraper"
+import { YouTubeApiError } from "@/lib/youtube"
 import { syncTikTokFromScraper } from "@/lib/tiktok-sync"
 import { syncInstagramFromScraper } from "@/lib/instagram-sync"
+import { syncYouTubeFromApi } from "@/lib/youtube-sync"
 
 
 interface TrackedAccountRow {
@@ -71,11 +68,11 @@ export async function POST(req: Request) {
 
     try {
       if (account.platform === "tiktok") {
-        await syncTikTok(supabase, account)
+        await syncTikTokFromScraper(supabase, account, 30)
       } else if (account.platform === "instagram") {
-        await syncInstagram(supabase, account)
+        await syncInstagramFromScraper(supabase, account, 30)
       } else if (account.platform === "youtube") {
-        await syncYouTube(supabase, account)
+        await syncYouTubeFromApi(supabase, account, 30)
       } else {
         result.skipped++
         continue
@@ -86,7 +83,7 @@ export async function POST(req: Request) {
       result.errors.push({
         id:       account.id,
         username: account.username,
-        error:    err instanceof EnsembleDataError || err instanceof ScraperError
+        error:    err instanceof ScraperError || err instanceof YouTubeApiError
           ? err.message
           : String(err),
       })
@@ -95,77 +92,4 @@ export async function POST(req: Request) {
 
   console.log(`[sync] Synced ${result.synced} accounts, failed ${result.failed}, skipped ${result.skipped}`)
   return NextResponse.json({ ...result, platform_limitations: PLATFORM_LIMITATIONS })
-}
-
-// ─── TikTok sync ──────────────────────────────────────────────────────────────
-
-async function syncTikTok(
-  supabase: ReturnType<typeof createServerSupabase>,
-  account:  TrackedAccountRow,
-) {
-  await syncTikTokFromScraper(supabase, account, 30)
-}
-
-// ─── Instagram sync ───────────────────────────────────────────────────────────
-
-async function syncInstagram(
-  supabase: ReturnType<typeof createServerSupabase>,
-  account:  TrackedAccountRow,
-) {
-  await syncInstagramFromScraper(supabase, account, 30)
-}
-
-// ─── YouTube sync ─────────────────────────────────────────────────────────────
-
-async function syncYouTube(
-  supabase: ReturnType<typeof createServerSupabase>,
-  account:  TrackedAccountRow,
-) {
-  const channelId = await resolveYouTubeChannelId(account.username)
-  const info = await getYouTubeChannelInfo(channelId)
-
-  await supabase
-    .from("tracked_accounts")
-    .update({
-      username:        channelId,
-      display_name:    info.channel_name,
-      avatar_url:      info.avatar,
-      follower_count:  info.subscriber_count,
-      total_views:     info.total_views,
-      avg_views:       info.video_count ? Math.round(info.total_views / info.video_count) : 0,
-      engagement_rate: 0,
-      last_synced_at:  new Date().toISOString(),
-    })
-    .eq("id", account.id)
-
-  await insertFollowerSnapshot(supabase, account.id, info.subscriber_count)
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function toNum(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(n) ? Math.trunc(n) : 0
-}
-
-async function insertFollowerSnapshot(
-  supabase:       ReturnType<typeof createServerSupabase>,
-  accountId:      string,
-  followerCount:  number,
-) {
-  const today = new Date().toISOString().slice(0, 10)
-  const { error } = await supabase
-    .from("follower_snapshots")
-    .upsert(
-      {
-        account_id:     accountId,
-        follower_count: toNum(followerCount),
-        date:           today,
-      },
-      { onConflict: "account_id,date" },
-    )
-
-  if (error) {
-    console.error("[sync] follower_snapshots upsert error:", error.message)
-  }
 }
