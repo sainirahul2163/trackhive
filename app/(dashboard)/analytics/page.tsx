@@ -18,7 +18,17 @@ import {
 } from "@/components/analytics/analytics-shared"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/use-user"
+import { toast, Toaster } from "sonner"
 import type { TrackedAccount, Platform } from "@/types"
+
+const TOAST_STYLE = {
+  backgroundColor: "#1a1a1a",
+  border:          "1px solid rgba(255,255,255,0.08)",
+  color:           "#fafafa",
+} as const
+
+const FACEBOOK_SYNC_NOW_MESSAGE =
+  "Syncing Facebook data can take 3–5 minutes due to Meta's platform limitations. Please keep this page open."
 
 type SortKey = "username" | "followers" | "total_views" | "avg_views" | "engagement_rate" | "video_count" | "total_likes" | "total_comments" | "total_shares" | "last_synced_at"
 
@@ -176,6 +186,11 @@ export default function AnalyticsPage() {
   const [syncingId, setSyncingId] = useState<string | null>(null)
 
   async function handleSync(id: string) {
+    const account = accounts.find((a) => a.id === id)
+    if (account?.platform === "facebook") {
+      toast.info(FACEBOOK_SYNC_NOW_MESSAGE, { duration: 10000 })
+    }
+
     setSyncingId(id)
     try {
       await fetch("/api/sync", {
@@ -215,6 +230,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-5 max-w-7xl">
+      <Toaster position="top-right" toastOptions={{ style: TOAST_STYLE }} />
       <CmdKSearch />
       <AnalyticsBreadcrumb section="Accounts" />
       <div className="flex items-center justify-between">

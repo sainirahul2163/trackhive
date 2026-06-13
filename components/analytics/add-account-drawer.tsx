@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { X, Link2, CheckCircle2, Loader2, AlertCircle, Users, Video, Eye } from "lucide-react"
+import { toast, Toaster } from "sonner"
 import {
   Sheet,
   SheetContent,
@@ -64,6 +65,15 @@ function fmt(n: number): string {
 
 type Status = "idle" | "detected" | "fetching" | "preview" | "saving" | "success" | "error"
 
+const TOAST_STYLE = {
+  backgroundColor: "#1a1a1a",
+  border:          "1px solid rgba(255,255,255,0.08)",
+  color:           "#fafafa",
+} as const
+
+const FACEBOOK_ADD_SYNC_MESSAGE =
+  "Facebook data can take 3–5 minutes to sync due to Meta's platform limitations. We'll update your dashboard automatically once it's ready."
+
 export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAccountDrawerProps) {
   const [urlInput, setUrlInput]   = useState("")
   const [detected, setDetected]   = useState<DetectedPlatform | null>(null)
@@ -71,6 +81,13 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
   const [status,   setStatus]     = useState<Status>("idle")
   const [errorMsg, setErrorMsg]   = useState("")
   const debounceRef               = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const facebookToastRef          = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (facebookToastRef.current) clearTimeout(facebookToastRef.current)
+    }
+  }, [])
 
   function handleUrlChange(val: string) {
     setUrlInput(val)
@@ -169,6 +186,14 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
         }).catch(() => {
           // Initial scrape runs in background; user can manual-sync later
         })
+
+        if (detected.platform === "facebook") {
+          if (facebookToastRef.current) clearTimeout(facebookToastRef.current)
+          facebookToastRef.current = setTimeout(() => {
+            toast.info(FACEBOOK_ADD_SYNC_MESSAGE, { duration: 10000 })
+            facebookToastRef.current = null
+          }, 7000)
+        }
       }
 
       setStatus("success")
@@ -186,6 +211,10 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
   }
 
   function reset() {
+    if (facebookToastRef.current) {
+      clearTimeout(facebookToastRef.current)
+      facebookToastRef.current = null
+    }
     setUrlInput("")
     setDetected(null)
     setPreview(null)
@@ -204,6 +233,7 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
+      <Toaster position="top-right" toastOptions={{ style: TOAST_STYLE }} />
       <SheetContent
         side="right"
         showCloseButton={false}

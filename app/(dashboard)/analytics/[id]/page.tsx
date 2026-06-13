@@ -34,7 +34,17 @@ import {
 } from "@/lib/analytics-data"
 import { fetchCampaigns } from "@/lib/campaigns-data"
 import { useUser } from "@/lib/use-user"
+import { toast, Toaster } from "sonner"
 import type { TrackedAccount, TrackedVideo, Campaign, Platform } from "@/types"
+
+const TOAST_STYLE = {
+  backgroundColor: "#1a1a1a",
+  border:          "1px solid rgba(255,255,255,0.08)",
+  color:           "#fafafa",
+} as const
+
+const FACEBOOK_SYNC_NOW_MESSAGE =
+  "Syncing Facebook data can take 3–5 minutes due to Meta's platform limitations. Please keep this page open."
 
 function VideoThumbnailPlaceholder({
   platform,
@@ -402,6 +412,10 @@ export default function AccountDetailPage() {
   useEffect(() => { load() }, [load])
 
   async function handleSyncNow() {
+    if (account?.platform === "facebook") {
+      toast.info(FACEBOOK_SYNC_NOW_MESSAGE, { duration: 10000 })
+    }
+
     setSyncing(true)
     try {
       await fetch("/api/sync", {
@@ -521,6 +535,7 @@ export default function AccountDetailPage() {
 
   return (
     <div className="space-y-5 max-w-7xl">
+      <Toaster position="top-right" toastOptions={{ style: TOAST_STYLE }} />
       {/* Back */}
       <Link href="/analytics" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
         <ArrowLeft className="w-3.5 h-3.5" /> Back to Analytics

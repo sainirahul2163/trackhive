@@ -17,8 +17,18 @@ import {
 import { fetchAccountsWithTotals } from "@/lib/analytics-queries"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/use-user"
+import { toast, Toaster } from "sonner"
 import type { TrackedAccount, Platform } from "@/types"
 import type { AccountWithTotals } from "@/lib/analytics-queries"
+
+const TOAST_STYLE = {
+  backgroundColor: "#1a1a1a",
+  border:          "1px solid rgba(255,255,255,0.08)",
+  color:           "#fafafa",
+} as const
+
+const FACEBOOK_SYNC_NOW_MESSAGE =
+  "Syncing Facebook data can take 3–5 minutes due to Meta's platform limitations. Please keep this page open."
 
 type Tab = "accounts" | "videos" | "schedule"
 
@@ -71,6 +81,11 @@ export default function TrackingOptionsPage() {
   const paged = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   async function handleSync(id: string) {
+    const account = accounts.find((a) => a.id === id)
+    if (account?.platform === "facebook") {
+      toast.info(FACEBOOK_SYNC_NOW_MESSAGE, { duration: 10000 })
+    }
+
     setSyncingId(id)
     try {
       await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountId: id }) })
@@ -131,6 +146,7 @@ export default function TrackingOptionsPage() {
 
   return (
     <div className="space-y-5 max-w-7xl">
+      <Toaster position="top-right" toastOptions={{ style: TOAST_STYLE }} />
       <AnalyticsBreadcrumb section="Tracking Options" />
       <div>
         <h1 className="text-[22px] font-semibold text-white tracking-tight">Tracking Options</h1>
