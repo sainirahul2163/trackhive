@@ -18,30 +18,6 @@ export class EnsembleDataError extends Error {
 
 // ─── Typed return interfaces ───────────────────────────────────────────────────
 
-export interface TikTokUserInfo {
-  username:       string
-  display_name:   string
-  avatar_url:     string
-  follower_count: number
-  following_count: number
-  video_count:    number
-  total_likes:    number
-}
-
-export interface TikTokVideo {
-  id:               string
-  description:      string
-  thumbnail:        string
-  views:            number
-  duration_seconds?: number | null
-  audio_name?:      string | null
-  saves?:           number | null
-  likes:       number
-  comments:    number
-  shares:      number
-  created_at:  string   // ISO-8601
-}
-
 export interface InstagramUserInfo {
   /** Numeric Instagram user ID (pk) — required for /instagram/user/reels */
   user_id:         number
@@ -137,80 +113,7 @@ export interface YouTubeChannelInfo {
   total_views:      number
 }
 
-// ─── Internal: raw API shapes (minimal — only fields we read) ─────────────────
-
-interface TTUserRaw {
-  user: {
-    uniqueId:     string
-    nickname:     string
-    avatarMedium: { url_list: string[] }
-  }
-  stats: {
-    followerCount:  number
-    followingCount: number
-    videoCount:     number
-    heartCount:     number
-  }
-}
-
-interface TTCoverField {
-  url_list?: string[]
-}
-
-interface TTPostRaw {
-  aweme_id:    string
-  desc:        string
-  create_time: number
-  duration?:   number
-  video?: {
-    duration?:      number
-    cover?:         TTCoverField
-    origin_cover?:  TTCoverField
-    originCover?:   TTCoverField
-    dynamic_cover?: TTCoverField
-    dynamicCover?:  TTCoverField
-  }
-  music?: {
-    title?: string
-  }
-  musicInfo?: {
-    title?: string
-  }
-  collectCount?:  number
-  collect_count?:  number
-  statistics?: {
-    play_count?:    number
-    digg_count?:    number
-    comment_count?: number
-    share_count?:   number
-    shareCount?:    number
-  }
-  stats?: {
-    play_count?:    number
-    digg_count?:    number
-    comment_count?: number
-    share_count?:   number
-    shareCount?:    number
-  }
-  shareCount?:   number
-  share_count?:  number
-  authorStats?: {
-    shareCount?: number
-  }
-}
-
-/** TikTok shares: try all known EnsembleData field paths. */
-export function extractTikTokShares(post: TTPostRaw): number {
-  const stats = post.statistics ?? post.stats
-  const n =
-    post.shareCount ??
-    post.share_count ??
-    stats?.shareCount ??
-    stats?.share_count ??
-    post.authorStats?.shareCount ??
-    0
-  return Number.isFinite(Number(n)) ? Number(n) : 0
-}
+// ─── Instagram helpers ────────────────────────────────────────────────────────
 
 function extractInstagramShares(reel: ApifyReelRaw): number {
   const n =
@@ -220,26 +123,6 @@ function extractInstagramShares(reel: ApifyReelRaw): number {
     reel.shares ??
     0
   return Number.isFinite(Number(n)) ? Number(n) : 0
-}
-
-function firstUrl(...lists: (string[] | undefined)[]): string {
-  for (const list of lists) {
-    const url = list?.[0]?.trim()
-    if (url) return url
-  }
-  return ""
-}
-
-/** TikTok cover: cover → originCover → dynamicCover (snake + camelCase). */
-export function extractTikTokThumbnail(video?: TTPostRaw["video"]): string {
-  if (!video) return ""
-  return firstUrl(
-    video.cover?.url_list,
-    video.origin_cover?.url_list,
-    video.originCover?.url_list,
-    video.dynamic_cover?.url_list,
-    video.dynamicCover?.url_list,
-  )
 }
 
 function extractInstagramThumbnail(reel: ApifyReelRaw): string {
@@ -252,6 +135,17 @@ function extractInstagramThumbnail(reel: ApifyReelRaw): string {
     null
 
   return url ?? ""
+}
+
+function reelEngagementRate(views: number, likes: number, comments: number): number {
+  if (views <= 0) return 0
+  return Math.round(((likes + comments) / views) * 100 * 100) / 100
+}
+
+function getApifyToken(): string {
+  const token = process.env.APIFY_API_TOKEN
+  if (!token) throw new EnsembleDataError(500, "APIFY_API_TOKEN is not configured")
+  return token
 }
 
 // ─── In-process 1-hour cache ──────────────────────────────────────────────────
@@ -309,75 +203,6 @@ async function ed<T>(path: string, params: Record<string, string | number | bool
   }
 
   return json.data as T
-}
-
-// ─── 1. TikTok User Info ──────────────────────────────────────────────────────
-
-export async function getTikTokUserInfo(username: string): Promise<TikTokUserInfo> {
-  const cacheKey = `tt:info:${username}`
-  const cached = fromCache<TikTokUserInfo>(cacheKey)
-  if (cached) return cached
-
-  const raw = await ed<TTUserRaw>("/tt/user/info", { username })
-
-  const result: TikTokUserInfo = {
-    username:        raw.user.uniqueId,
-    display_name:    raw.user.nickname,
-    avatar_url:      raw.user.avatarMedium?.url_list?.[0] ?? "",
-    follower_count:  raw.stats.followerCount  ?? 0,
-    following_count: raw.stats.followingCount ?? 0,
-    video_count:     raw.stats.videoCount     ?? 0,
-    total_likes:     raw.stats.heartCount     ?? 0,
-  }
-
-  toCache(cacheKey, result)
-  return result
-}
-
-// ─── 2. TikTok User Videos ────────────────────────────────────────────────────
-
-export async function getTikTokUserVideos(username: string, depth = 1): Promise<TikTokVideo[]> {
-  const cacheKey = `tt:posts:${username}:${depth}`
-  const cached = fromCache<TikTokVideo[]>(cacheKey)
-  if (cached) return cached
-
-  const raw = await ed<TTPostRaw[]>("/tt/user/posts", { username, depth })
-
-  const posts: TikTokVideo[] = (raw ?? []).map((p) => {
-    const stats = p.statistics ?? p.stats
-    const duration = p.duration ?? p.video?.duration ?? null
-    const audioName = p.music?.title ?? p.musicInfo?.title ?? null
-    const saves = p.collectCount ?? p.collect_count ?? 0
-    return {
-      id:               p.aweme_id,
-      description:      p.desc ?? "",
-      thumbnail:        extractTikTokThumbnail(p.video),
-      views:            stats?.play_count    ?? 0,
-      likes:            stats?.digg_count    ?? 0,
-      comments:         stats?.comment_count ?? 0,
-      shares:           extractTikTokShares(p),
-      created_at:       new Date((p.create_time ?? 0) * 1000).toISOString(),
-      duration_seconds: duration,
-      audio_name:       audioName,
-      saves,
-    }
-  })
-
-  toCache(cacheKey, posts)
-  return posts
-}
-
-// ─── Instagram helpers ────────────────────────────────────────────────────────
-
-function reelEngagementRate(views: number, likes: number, comments: number): number {
-  if (views <= 0) return 0
-  return Math.round(((likes + comments) / views) * 100 * 100) / 100
-}
-
-function getApifyToken(): string {
-  const token = process.env.APIFY_API_TOKEN
-  if (!token) throw new EnsembleDataError(500, "APIFY_API_TOKEN is not configured")
-  return token
 }
 
 export async function fetchInstagramProfileApify(

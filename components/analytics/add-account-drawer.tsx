@@ -428,7 +428,7 @@ export function AddAccountDrawer({ open, onOpenChange, onAccountAdded }: AddAcco
         {/* Footer */}
         <div className="px-6 py-4 border-t border-white/[0.06]">
           <p className="text-xs text-zinc-600 text-center">
-            Real follower &amp; video counts fetched live via EnsembleData.
+            Real follower &amp; video counts fetched live via TrackHive Scraper.
           </p>
         </div>
       </SheetContent>

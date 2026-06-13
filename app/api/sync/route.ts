@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server"
 import { createServerSupabase } from "@/lib/supabase-server"
 import {
-  getTikTokUserInfo,
-  getTikTokUserVideos,
   fetchInstagramProfileApify,
   fetchInstagramReelsApify,
   getYouTubeChannelInfo,
   resolveYouTubeChannelId,
   EnsembleDataError,
   PLATFORM_LIMITATIONS,
-  type TikTokVideo,
   type InstagramPost,
 } from "@/lib/ensembledata"
+import { ScraperError } from "@/lib/scraper"
+import { syncTikTokFromScraper } from "@/lib/tiktok-sync"
 
 
 interface TrackedAccountRow {
@@ -108,7 +107,9 @@ export async function POST(req: Request) {
       result.errors.push({
         id:       account.id,
         username: account.username,
-        error:    err instanceof EnsembleDataError ? err.message : String(err),
+        error:    err instanceof EnsembleDataError || err instanceof ScraperError
+          ? err.message
+          : String(err),
       })
     }
   }
@@ -123,67 +124,7 @@ async function syncTikTok(
   supabase: ReturnType<typeof createServerSupabase>,
   account:  TrackedAccountRow,
 ) {
-  const [info, videos] = await Promise.all([
-    getTikTokUserInfo(account.username),
-    getTikTokUserVideos(account.username, 2),
-  ])
-
-  // Compute aggregate stats from videos
-  const totalViews = videos.reduce((s, v) => s + v.views, 0)
-  const avgViews   = videos.length ? Math.round(totalViews / videos.length) : 0
-  const engRate    = computeEngagementRate(videos.map((v) => ({
-    views: v.views, likes: v.likes, comments: v.comments,
-  })))
-
-  // Update tracked_accounts
-  await supabase
-    .from("tracked_accounts")
-    .update({
-      display_name:    info.display_name,
-      avatar_url:      info.avatar_url,
-      follower_count:  info.follower_count,
-      total_views:     totalViews,
-      avg_views:       avgViews,
-      engagement_rate: engRate,
-      last_synced_at:  new Date().toISOString(),
-    })
-    .eq("id", account.id)
-
-  await insertFollowerSnapshot(supabase, account.id, info.follower_count)
-
-  for (const video of videos) {
-    const videoId = String(video.id ?? "").trim()
-    if (!videoId) continue
-
-    const views    = toNum(video.views)
-    const likes    = toNum(video.likes)
-    const comments = toNum(video.comments)
-    const shares   = resolveTikTokShares(video)
-    const engagementRate = computeVideoEngagementRate(views, likes, comments)
-
-    const payload = buildTrackedVideoPayload({
-      account_id:       account.id,
-      platform:         "tiktok",
-      video_url:        `https://www.tiktok.com/@${account.username}/video/${videoId}`,
-      thumbnail_url:    resolveThumbnailUrl(video.thumbnail),
-      caption:          video.description,
-      views,
-      likes,
-      comments,
-      shares,
-      engagement_rate:  engagementRate,
-      virality_score:   Math.min(10, (views / 100_000) * 10),
-      posted_at:        video.created_at,
-      duration_seconds: video.duration_seconds,
-      audio_name:       video.audio_name,
-      saves:            video.saves,
-    })
-
-    const upserted = await upsertTrackedVideo(supabase, payload)
-    if (upserted?.id) {
-      await insertDailySnapshot(supabase, upserted.id, video)
-    }
-  }
+  await syncTikTokFromScraper(supabase, account, 30)
 }
 
 // ─── Instagram sync ───────────────────────────────────────────────────────────
@@ -292,35 +233,12 @@ async function syncYouTube(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface TikTokVideoWithShares extends TikTokVideo {
-  shareCount?:   number
-  share_count?:  number
-  statistics?:   { shareCount?: number; share_count?: number }
-  stats?:        { shareCount?: number; share_count?: number }
-  authorStats?:  { shareCount?: number }
-}
-
 interface InstagramReelWithShares extends InstagramPost {
   sharesCount?:     number
   videoShareCount?: number
   shareCount?:      number
   likesCount?:      number
   videoPlayCount?:  number | null
-}
-
-function resolveTikTokShares(video: TikTokVideo): number {
-  const v = video as TikTokVideoWithShares
-  return toNum(
-    v.shares ??
-    v.shareCount ??
-    v.share_count ??
-    v.statistics?.shareCount ??
-    v.statistics?.share_count ??
-    v.stats?.shareCount ??
-    v.stats?.share_count ??
-    v.authorStats?.shareCount ??
-    0,
-  )
 }
 
 function resolveInstagramShares(reel: InstagramPost): number {

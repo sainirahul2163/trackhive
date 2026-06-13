@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
 import {
-  getTikTokUserInfo,
   getInstagramUserInfo,
   getYouTubeChannelInfo,
   resolveYouTubeChannelId,
   fetchInstagramReelsApify,
   EnsembleDataError,
 } from "@/lib/ensembledata"
+import { scrapeTikTokProfile, ScraperError } from "@/lib/scraper"
 
 export interface AccountPreview {
   platform:         "tiktok" | "instagram" | "youtube"
@@ -32,14 +32,14 @@ export async function GET(req: Request) {
     let preview: AccountPreview
 
     if (platform === "tiktok") {
-      const info = await getTikTokUserInfo(username)
+      const profile = await scrapeTikTokProfile(username)
       preview = {
         platform:       "tiktok",
-        username:       info.username,
-        display_name:   info.display_name,
-        avatar_url:     info.avatar_url,
-        follower_count: info.follower_count,
-        video_count:    info.video_count,
+        username:       profile.username,
+        display_name:   profile.display_name,
+        avatar_url:     profile.avatar_url,
+        follower_count: profile.followers_count,
+        video_count:    profile.video_count,
       }
     } else if (platform === "instagram") {
       const [info, reels] = await Promise.all([
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(preview)
   } catch (err) {
-    if (err instanceof EnsembleDataError) {
+    if (err instanceof ScraperError || err instanceof EnsembleDataError) {
       const status = err.status === 404 ? 404 : 502
       return NextResponse.json({ error: err.message }, { status })
     }
